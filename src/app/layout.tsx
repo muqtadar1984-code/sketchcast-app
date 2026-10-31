@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import {
   Space_Grotesk,
   Inter,
@@ -120,6 +120,16 @@ const fontVars = [
 export const metadata: Metadata = {
   title: "SketchCast AI",
   description: "Turn a textbook chapter into a narrated lesson, deck and worksheets.",
+};
+
+// Phones, and the app-store wrappers that will host this later: the page may
+// draw under a notch or home indicator (viewport-fit=cover), and every surface
+// that touches an edge — the header, the corner widgets — pads itself by the
+// env(safe-area-inset-*) values that only exist once this is set.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 // The document's language and writing direction are decided here, once, for

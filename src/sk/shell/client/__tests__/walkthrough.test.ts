@@ -55,6 +55,7 @@ import {
   walkStartCommand,
   WALK_STORE_KEY,
   type PlannedStop,
+  type WalkStartEvent,
   type WalkState,
 } from "../walkthrough";
 import { WALK_STOPS, walkRoleFor, type WalkFacts, type WalkRole } from "@/sk/walkthrough/stops";
@@ -108,14 +109,18 @@ describe("needHolds / resolveRoute", () => {
     expect(resolveRoute("/present?class={classId}", {})).toBe("/present");
     expect(resolveRoute("/dashboard?book={bookId}", { bookId: "b3" })).toBe("/dashboard?book=b3");
     expect(resolveRoute("/x/{bookId}", {})).toBeNull();
+    // A whole path, query included (the student Board's "Learn with SK" link).
+    expect(resolveRoute("{learnPath}", { learnPath: "/present?learn=g1&autostart=1" })).toBe("/present?learn=g1&autostart=1");
+    expect(resolveRoute("{learnPath}", {})).toBeNull();
     expect(routePath("/dashboard/diary?c=1")).toBe("/dashboard/diary");
   });
 });
 
 describe("planWalk: per-role stops as built", () => {
-  it("every role's stop count with everything on (teacher 14 → 32 → 27 combined → 29 with Report a problem and the Upload close → 22 folded, student 11 → 16 → 12 without SK Tutor, parent 12 → 16 (home 17), principal 12 → 16, coordinator 10 → 14)", () => {
+  it("every role's stop count with everything on (teacher 14 → 32 → 27 combined → 29 with Report a problem and the Upload close → 22 folded, student 11 → 16 → 12 without SK Tutor → 13 with Learn with SK (14 with an assigned kit's Board), parent 12 → 16 (home 17), principal 12 → 16, coordinator 10 → 14)", () => {
     expect(planWalk("teacher", TEACHER_ALL)).toHaveLength(22);
-    expect(planWalk("student", { diary: true })).toHaveLength(12);
+    expect(planWalk("student", { diary: true })).toHaveLength(13);
+    expect(planWalk("student", { diary: true, learnPath: "/present?learn=g1&autostart=1" })).toHaveLength(14);
     expect(planWalk("parent", { children: 2, verifiedChildren: 2, schoolParent: true, diary: true, calendar: true, parentPortal: true })).toHaveLength(16);
     // Home educator: Library + kits in, notices + Test Papers out.
     expect(planWalk("parent", { children: 1, verifiedChildren: 1, schoolParent: false, catalogue: true })).toHaveLength(17);
@@ -238,6 +243,27 @@ describe("planWalk: per-role stops as built", () => {
   it("student with nothing assigned: the empty My lessons, with its own line", () => {
     const s = planWalk("student", {}).find((x) => x.id === "openLesson")!;
     expect(s.anchors[1]).toEqual({ sel: '[data-tour="assignments"]', line: "openLessonEmpty" });
+  });
+  it("student Board (2026-10-31): after My lessons, Learn with SK, then her first assigned kit's Board as ONE narration", () => {
+    const learnPath = "/present?learn=g1&autostart=1";
+    const p = planWalk("student", { diary: true, reportIssue: true, learnPath });
+    expect(ids(p).slice(0, 7)).toEqual(["hello", "assignments", "openLesson", "progress", "learnWithSk", "learnBoard", "myBooks"]);
+    const lw = p.find((s) => s.id === "learnWithSk")!;
+    expect(lw.route).toBe("/dashboard");
+    expect(lw.anchors).toEqual([{ sel: '[data-tour="learn-with-sk"]' }, { sel: '[data-tour="assignments"]', line: "learnWithSkEmpty" }]);
+    const b = p.find((s) => s.id === "learnBoard")!;
+    expect(b.route).toBe(learnPath);
+    expect(partIds(b)).toEqual(["learnSteps", "learnAsk", "learnPractice"]);
+    expect(b.whole).toBe("learnBoard");
+    // The practice box shows only once the worksheet is up: the strip's Worksheet step, then the strip.
+    expect(b.parts!.find((x) => x.id === "learnPractice")!.anchors.map((a) => a.sel)).toEqual(['[data-tour="learn-practice"]', '[data-tour="learn-step-worksheet"]', '[data-tour="learn-steps"]']);
+    expect(b.parts!.find((x) => x.id === "learnAsk")!.anchors[0]!.sel).toBe('[data-sk="launcher"][data-sk-board="true"]');
+    // Nothing assigned (no learnPath, or the read failed): no Board stop; Learn with SK still says where it will be.
+    for (const f of [{}, { learnPath: null }]) {
+      const q = planWalk("student", f);
+      expect(ids(q)).toContain("learnWithSk");
+      expect(ids(q)).not.toContain("learnBoard");
+    }
   });
   it("parent: no child → straight to Add child; unverified → say why; home educator → Library, no notices or Test Papers", () => {
     expect(ids(planWalk("parent", { children: 0, catalogue: false }))).toEqual(["hello", "homeLibrary", "reportProblem", "notifications", "language", "skMenu", "addChild", "uploadNow"]);
@@ -437,7 +463,7 @@ describe("Report a problem: the inline report on a failed kit first, else the bo
       const s = p.find((x) => x.id === "reportProblem")!;
       expect(s.route, role).toBe(route);
       // (≥ half: without SK Tutor's four stops the student's report stop — her
-      // last /dashboard stop — sits exactly halfway, 7th of 12.)
+      // last /dashboard stop — sits past halfway, 8th of 13.)
       expect(ids(p).indexOf("reportProblem"), role).toBeGreaterThanOrEqual(p.length / 2);
       expect(ids(p).at(-1), role).not.toBe("reportProblem");
     }
@@ -1080,5 +1106,77 @@ describe("the start: at once, never waiting for a page stop 1 is not on", () => 
     await c.flush();
     expect(c.ready).toHaveLength(0);
     expect(c.starter.start({ record: false })).toBe(true); // she can ask again
+  });
+});
+
+// 2026-10-31 (founder: "Hi SK, show me around" by microphone started nothing;
+// production had the server's start_tour → `walkthrough` event and SK saying
+// "Here's the tour…", then no stop and no skip for five minutes). Every start
+// now says how it ended, so the next silent one names its step.
+describe("the start reports how it ended", () => {
+  type Ctx = { record: boolean };
+  function harness(o: { facts?: () => Promise<{ role?: string; facts?: WalkFacts } | null>; settle?: () => Promise<boolean>; onReady?: () => void } = {}) {
+    const events: WalkStartEvent[] = [];
+    let clock = 1000;
+    const starter = createWalkStarter<Ctx>({
+      roleGuess: () => "teacher",
+      here: () => "/dashboard?book=b1",
+      navigate: () => {},
+      loadFacts: () => (o.facts ? o.facts() : Promise.resolve({ role: "teacher", facts: TEACHER_ALL })),
+      settle: () => (o.settle ? o.settle() : Promise.resolve(true)),
+      onStarting: () => {},
+      onReady: () => o.onReady?.(),
+      onEvent: (e) => events.push(e),
+      now: () => clock,
+      setTimer: () => 0,
+      clearTimer: () => {},
+    });
+    const flush = async () => {
+      for (let i = 0; i < 10; i++) await Promise.resolve();
+    };
+    return { starter, events, flush, tick: (ms: number) => (clock += ms) };
+  }
+
+  it("ready, with the number of stops and the time since it was asked", async () => {
+    let answer: (v: { role?: string; facts?: WalkFacts }) => void = () => {};
+    const h = harness({ facts: () => new Promise((r) => (answer = r)) });
+    h.starter.start({ record: false });
+    h.tick(640);
+    answer({ role: "teacher", facts: TEACHER_ALL });
+    await h.flush();
+    expect(h.events).toHaveLength(1);
+    expect(h.events[0]).toMatchObject({ what: "ready", ms: 640 });
+    expect(h.events[0]!.stops).toBeGreaterThan(5);
+  });
+
+  it("joined: a start asked while one is starting says so (it was not dropped silently)", async () => {
+    const h = harness({ facts: () => new Promise(() => {}) });
+    h.starter.start({ record: false });
+    expect(h.starter.start({ record: false })).toBe(false);
+    expect(h.events).toEqual([{ what: "joined", ms: 0 }]);
+  });
+
+  it("aborted (Skip while starting, or the settle gave up) and failed (a throw) are reported", async () => {
+    const c = harness({ facts: () => new Promise((r) => setTimeout(() => r(null), 0)) });
+    c.starter.start({ record: false });
+    c.starter.cancel();
+    await new Promise((r) => setTimeout(r, 5));
+    await c.flush();
+    expect(c.events.map((e) => e.what)).toEqual(["aborted"]);
+
+    const s = harness({ settle: () => Promise.resolve(false) });
+    s.starter.start({ record: false });
+    await s.flush();
+    expect(s.events.map((e) => e.what)).toEqual(["aborted"]);
+
+    const f = harness({
+      onReady: () => {
+        throw new Error("boom");
+      },
+    });
+    f.starter.start({ record: false });
+    await f.flush();
+    expect(f.events).toEqual([{ what: "failed", ms: 0, error: "boom" }]);
+    expect(f.starter.starting).toBe(false);
   });
 });

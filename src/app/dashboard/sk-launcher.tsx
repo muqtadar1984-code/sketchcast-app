@@ -49,6 +49,7 @@ export default function SkLauncher({
   replay = false,
   board,
   tutor,
+  lead = null,
 }: {
   copy: SkShellCopy;
   /** sk.walkthrough — the tour's words for this request's language. */
@@ -66,6 +67,8 @@ export default function SkLauncher({
   board?: SkBoardBridge | null;
   /** S3 slice D: set by the /sk layout — the kit player bridge the Shell drives. */
   tutor?: SkTutorBridge | null;
+  /** The student Board (learner mode): SK's next line as it leads the lesson. */
+  lead?: { key: string; text: string } | null;
 }) {
   // Flipped the moment the first-login run ends (completed or skipped), so a
   // replay in the same session never writes the seen row again while the
@@ -91,7 +94,7 @@ export default function SkLauncher({
   // "Take the tour": the header's 🧭 (TourProvider, for SK users), SK's menu
   // and "Show me around" reach the ONE runner here. A replay never records.
   const { start, active: tourActive } = tour;
-  useEffect(() => onSkWalkthroughRequest(() => start()), [start]);
+  useEffect(() => onSkWalkthroughRequest(() => start({ via: "bus" })), [start]);
 
   // First login (founder decision 2): it starts by itself, from a home page.
   const [autoTried, setAutoTried] = useState(false);
@@ -108,7 +111,7 @@ export default function SkLauncher({
       } catch {
         carried = false;
       }
-      if (!carried) start({ record: true });
+      if (!carried) start({ record: true, via: "auto" });
     }, 700);
     return () => window.clearTimeout(t);
   }, [autoTried, introPending, home, tourActive, start]);
@@ -157,8 +160,9 @@ export default function SkLauncher({
               }
             : null
         }
-        onTakeTour={() => start()}
+        onTakeTour={(via) => start({ via })}
         takeTourLabel={walkCopy.ui.takeTour}
+        lead={lead}
       />
       {tour.spotlight}
     </>

@@ -192,14 +192,19 @@ export function teachingBlock(support: Extract<TeachingSupport, { status: "ready
   ].join("\n");
 }
 
+/** Who a teaching call speaks to: the class (a teacher's Board), or ONE
+ *  student on her own Board (learner mode, 2026-10-31) — simpler and warmer. */
+export const TEACH_AUDIENCE_CLASS = "the class";
+export const TEACH_AUDIENCE_STUDENT = "the student (one learner on her own: simple everyday words, warm and encouraging)";
+
 /** The user turn for the teaching call. `language` is the locale's name. */
-export function teachingQuestion(kind: "explain" | "compare", support: Extract<TeachingSupport, { status: "ready" }>, language: string): string {
+export function teachingQuestion(kind: "explain" | "compare", support: Extract<TeachingSupport, { status: "ready" }>, language: string, audience: string = TEACH_AUDIENCE_CLASS): string {
   const [a, b] = support.segments;
   const nameOf = (s: TeachSegment | undefined) => s?.concept || s?.heading || "this slide";
   if (kind === "compare" && b) {
-    return `Compare "${nameOf(a)}" with "${nameOf(b)}" for the class in 2–4 short sentences, in ${language}: the differences, drawn only from the two narrations in TEACHING. No headings, no lists.`;
+    return `Compare "${nameOf(a)}" with "${nameOf(b)}" for ${audience} in 2–4 short sentences, in ${language}: the differences, drawn only from the two narrations in TEACHING. No headings, no lists.`;
   }
-  return `Explain "${nameOf(a)}" to the class in 2–4 short sentences, in ${language}, using only the narration in TEACHING. No headings, no lists.`;
+  return `Explain "${nameOf(a)}" to ${audience} in 2–4 short sentences, in ${language}, using only the narration in TEACHING. No headings, no lists.`;
 }
 
 /** Everything the grounding check may accept from the teaching text. */

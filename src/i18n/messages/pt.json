@@ -156,7 +156,8 @@
       "partLoadFailed": "A Parte {n} não carregou agora — feche isto e atualize a página para tentar de novo.",
       "multiPartHint": "Parte {n} de {total} (~15 min). Termine uma parte para marcá-la — a última conclui a aula.",
       "singlePartHint": "Assista até o fim para marcar esta aula como concluída."
-    }
+    },
+    "learnWithSk": "Aprender com o SK"
   },
   "app": {
     "auth": {
@@ -2077,6 +2078,73 @@
       "notTeaching": "A lousa da sala de aula é para professores.",
       "plan": "A lousa da sala de aula está inclusa nos planos Pro, Pro+ e em todos os planos escolares.",
       "back": "Voltar para sua biblioteca"
+    },
+    "learn": {
+      "title": "As minhas lições",
+      "pick": "Escolhe uma lição para aprender com o SK.",
+      "empty": "Ainda não há lições. Quando o teu professor te der uma, ela aparece aqui.",
+      "due": "Entrega a {date}",
+      "overdue": "Era para {date}",
+      "back": "Voltar às minhas lições",
+      "close": "Fechar",
+      "loading": "A abrir a tua lição…",
+      "failed": "Não foi possível abrir esta lição. Tenta novamente daqui a pouco.",
+      "prevPage": "Página anterior",
+      "nextPage": "Página seguinte",
+      "steps": {
+        "video": "Vídeo",
+        "slides": "Diapositivos",
+        "worksheet": "Ficha de trabalho"
+      },
+      "go": {
+        "video": "▶ Ver o vídeo",
+        "slides": "Abrir os diapositivos",
+        "worksheet": "Abrir a ficha",
+        "next": "Próximo passo"
+      },
+      "sk": {
+        "startVideo": "Olá! Vamos começar pelo vídeo. Carrega em reproduzir quando estiveres pronto e pergunta-me o que quiseres, quando quiseres.",
+        "startSlides": "Olá! Vamos começar pelos diapositivos. Pergunta-me o que quiseres, quando quiseres.",
+        "startWorksheet": "Olá! Vamos ver a ficha de trabalho juntos. Pergunta-me se ficares com dúvidas.",
+        "toSlides": "Muito bem! Agora vamos ver os diapositivos.",
+        "toWorksheet": "Excelente trabalho! Agora vamos experimentar a ficha de trabalho.",
+        "slidesOpen": "Aqui estão os diapositivos. Destaca a parte que queres que eu explique.",
+        "slidesMissing": "Os diapositivos ainda não estão prontos, por isso vamos passar à ficha de trabalho.",
+        "worksheetOpen": "Aqui está a ficha de trabalho. Lê cada pergunta e tenta responder. Pergunta-me se ficares com dúvidas.",
+        "worksheetFailed": "Não consegui abrir a ficha agora. Mesmo assim, podes perguntar-me o que quiseres.",
+        "done": "É toda a lição. Muito bem! Pergunta-me o que não tiveres a certeza.",
+        "empty": "Esta lição ainda não tem nada para mostrar. Mesmo assim, podes fazer-me uma pergunta."
+      },
+      "practice": {
+        "answerLabel": "Sua resposta",
+        "placeholder": "Digite sua resposta",
+        "check": "Verificar",
+        "checking": "Verificando…",
+        "help": "Preciso de ajuda",
+        "choose": "Escolha…",
+        "correct": "Correto! Muito bem.",
+        "incorrect": "Não exatamente. Tente de novo.",
+        "shown": "Aqui está a resposta. Leia e depois tente digitá-la.",
+        "review": "Enviada ao seu professor para correção.",
+        "failed": "Não consegui verificar agora. Tente novamente.",
+        "slowDown": "Só um momento — essa resposta ainda está sendo verificada.",
+        "next": "Próxima pergunta",
+        "score": "Sua pontuação: {correct}/{total}",
+        "hintOne": "1 dica",
+        "hintMany": "{n} dicas",
+        "wellDone": "Muito bem! Você terminou a folha de exercícios. Pergunte-me sobre o que quiser revisar.",
+        "keepGoing": "Bom esforço! Vamos continuar praticando. Pergunte-me sobre qualquer questão que achou difícil.",
+        "rung": {
+          "hint": "Dica",
+          "step": "Passo resolvido",
+          "answer": "Resposta"
+        },
+        "generic": {
+          "hint": "Leia a pergunta de novo, devagar, e procure as palavras-chave.",
+          "step": "Divida em pequenos passos. O que você já sabe e o que a pergunta está pedindo?",
+          "answer": "Compare esta resposta com a sua e veja onde elas diferem."
+        }
+      }
     }
   },
   "kits": {
@@ -2163,6 +2231,13 @@
         "sources": "Fontes",
         "chapter": "cap. {n}",
         "from": "Fonte: {source}"
+      },
+      "teach": {
+        "gapNote": "Parece que esta é difícil — deixa-me ensinar de outra maneira.",
+        "extraOffer": "Muito bem — terminaste esta lição! Queres um passo Extra curto para ir um pouco mais longe?",
+        "extraYes": "Mostra-me",
+        "extraNo": "Agora não",
+        "pictureFrom": "Dos diapositivos da tua lição — diapositivo {n}"
       },
       "gap": {
         "thumb": "Isto não ajudou",
@@ -2692,7 +2767,7 @@
         "downloadsNone": "Cada material vai baixar pronto para editar, com seu próprio gabarito.",
         "rerun": "A canetinha refaz um material com créditos; quem já recebeu a atribuição fica com sua cópia.",
         "rerunNone": "A canetinha refaz um único material, e o × o remove.",
-        "assign": "Atribuir envia este kit para uma turma com prazo, ou diga “atribua os exercícios ao 5A para sexta”.",
+        "assign": "Atribuir envia este kit para uma turma com prazo; depois os alunos o aprendem comigo na própria Lousa.",
         "assignChapter": "Atribuir capítulo envia tudo o que está pronto neste capítulo para uma turma, com prazo.",
         "assignNone": "Depois de gerar um kit, você poderá atribuí-lo a uma turma por aqui.",
         "boardBridge": "Os kits gerados também rodam na Lousa da sala, que vamos ver daqui a um minuto.",
@@ -2736,6 +2811,12 @@
         "openLessonEmpty": "Ainda não há nada atribuído; as aulas do seu professor vão aparecer aqui.",
         "progress": "Aqui você vê o que terminou e o que falta; nos exercícios, envie uma foto das respostas, e os quizzes corrigem na hora.",
         "progressEmpty": "Quando tiver tarefas, aqui você vê o que terminou e o que falta.",
+        "learnWithSk": "Aprender com o SK abre essa aula na sua própria Lousa, onde eu ensino você.",
+        "learnWithSkEmpty": "Quando chegar uma aula, Aprender com o SK vai abri-la na sua própria Lousa, onde eu ensino você.",
+        "learnBoard": "Aqui eu conduzo cada aula: vídeo, diapositivos e depois a ficha de trabalho, {learnAsk}e você pode me perguntar qualquer coisa ou destacar palavras para perguntar sobre elas. {learnPractice}Na ficha, toque em Verificar ou “Preciso de ajuda”; se ainda estiver difícil, eu ensino de outro jeito no nosso chat.",
+        "learnSteps": "Aqui eu conduzo cada aula: vídeo, depois diapositivos, depois a ficha de trabalho.",
+        "learnAsk": "Me pergunte qualquer coisa, ou destaque palavras na lousa para perguntar sobre elas.",
+        "learnPractice": "Na ficha, toque em Verificar ou “Preciso de ajuda”; se ainda estiver difícil, eu ensino de outro jeito no nosso chat.",
         "myBooks": "Meus livros guarda seus livros SketchCast; para adicionar um, diga “ative meu código de livro”.",
         "myBooksNone": "Seus livros SketchCast aparecem em Meus livros; diga “ative meu código de livro” para adicionar.",
         "diaryTimetable": "A barra de cima tem a agenda da sua turma e o seu horário da semana.",
@@ -2749,7 +2830,7 @@
       },
       "parent": {
         "hello": "Sou o SK e ajudo você a acompanhar seus filhos: toque para me ouvir.",
-        "childCard": "O cartão de cada filho mostra tarefas, prazos, notas e comentários do professor.",
+        "childCard": "O cartão de cada filho mostra tarefas, prazos, notas e comentários; ele pode aprender comigo, e você vai ver o progresso dele.",
         "childUnverified": "Este vínculo aguarda a verificação da escola; até lá, não posso falar sobre este filho.",
         "week": "Esta semana: feito, atrasado ou aguardando correção, mais os recados novos da agenda.",
         "weekSteps": "Abaixo, até dois próximos passos; pergunte “como estão meus filhos?” quando quiser.",

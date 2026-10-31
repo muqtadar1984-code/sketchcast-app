@@ -62,12 +62,12 @@ export default function SubscribeButton({ t }: { t: Dictionary["comms"]["calenda
 
   return (
     <>
-      <button onClick={openPanel} className="btn-ghost h-10 px-4 text-sm">
+      <button onClick={openPanel} className="btn-ghost h-11 sm:h-10 px-4 text-sm">
         🔗 {t.button}
       </button>
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setOpen(false)}>
-          <div className="card w-full max-w-md p-6 space-y-3" onClick={(e) => e.stopPropagation()}>
+          <div className="card w-full max-w-md p-4 sm:p-6 space-y-3 max-h-[90dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-lg">{t.title}</h2>
             <p className="text-sm text-[#5B6470]">
               {/* Menu breadcrumbs: the arrows walk you through a menu, so they
@@ -83,23 +83,23 @@ export default function SubscribeButton({ t }: { t: Dictionary["comms"]["calenda
             {busy && <p className="text-sm text-[#98A0A9]">{t.preparing}</p>}
             {url && (
               <div className="flex items-center gap-2">
-                <input readOnly value={url} onFocus={(e) => e.target.select()} className="field h-10 px-3 text-xs flex-1" />
-                <button onClick={() => void copy()} className="btn-primary h-10 px-3 text-sm shrink-0">
+                <input readOnly value={url} onFocus={(e) => e.target.select()} className="field h-11 sm:h-10 px-3 text-base sm:text-xs flex-1 min-w-0" />
+                <button onClick={() => void copy()} className="btn-primary h-11 sm:h-10 px-3 text-sm shrink-0">
                   {copied ? `${t.copied} ✓` : t.copy}
                 </button>
               </div>
             )}
             {error && <p className="text-sm text-red-600">{error}</p>}
-            <div className="flex items-center justify-between pt-1">
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
               <button
                 onClick={() => void ensureToken(true)}
                 disabled={busy}
-                className="text-xs text-[#B42318] hover:underline"
+                className="min-h-11 sm:min-h-0 text-xs text-[#B42318] hover:underline"
                 title={t.rotateTitle}
               >
                 {t.rotate}
               </button>
-              <button onClick={() => setOpen(false)} className="btn-ghost h-9 px-3 text-sm">
+              <button onClick={() => setOpen(false)} className="btn-ghost h-11 sm:h-9 px-3 text-sm">
                 {t.done}
               </button>
             </div>

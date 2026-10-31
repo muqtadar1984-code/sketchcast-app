@@ -26,7 +26,7 @@ export default function AssistantLauncher({ t, hidden = false }: { t: AssistantM
 
   return (
     <>
-      <div className="fixed bottom-4 end-4 z-40">
+      <div data-corner className="fixed bottom-4 end-4 z-40">
         {/* Collapsed to its mark by default, expanding on hover/focus — the same
             treatment as the bottom-left "Report a problem" widget, so neither
             floating pill sits over the content column. */}

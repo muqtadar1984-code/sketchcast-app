@@ -98,7 +98,7 @@ export default function DeleteBook({
       disabled={busy}
       aria-label={m.delete}
       title={m.delete}
-      className="w-6 h-6 flex items-center justify-center rounded-md text-[#5B6470] hover:bg-[#FCEBEA] hover:text-[#B42318] disabled:opacity-50"
+      className="w-6 h-6 flex items-center justify-center rounded-md text-[#5B6470] hover:bg-[#FCEBEA] hover:text-[#B42318] disabled:opacity-50 pointer-coarse:min-w-11 pointer-coarse:min-h-11"
     >
       ✕
     </button>

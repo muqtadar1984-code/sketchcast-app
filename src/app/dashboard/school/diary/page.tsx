@@ -242,8 +242,8 @@ export default async function SchoolDiaryPage({
   return (
     <div className="min-h-screen bg-[#FCFCFA] text-[#14181F]">
       <AppHeader />
-      <main className="max-w-7xl mx-auto px-6 py-10">
-        <h1 className="text-4xl mb-2">{t.title}</h1>
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
+        <h1 className="text-3xl sm:text-4xl mb-2">{t.title}</h1>
         <InkUnderline className="block h-3 w-28 mb-3" />
         <p className="text-[#5B6470] mb-7">{t.intro}</p>
 
@@ -253,7 +253,7 @@ export default async function SchoolDiaryPage({
             otherwise be the one person who never sees an urgent notice. */}
         <NoticesSection />
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 mb-10">
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 sm:gap-3 mb-8 sm:mb-10">
           {metrics.map((m) => (
             <div key={m.key} className="rounded-xl bg-white border border-[#E6E8E4] px-4 py-3">
               <div className="text-xs text-[#5B6470]">{m.label}</div>
@@ -273,7 +273,7 @@ export default async function SchoolDiaryPage({
                 <Link
                   key={cl.id}
                   href={`/dashboard/school/diary?c=${cl.id}&d=${day}`}
-                  className={`chip font-sans normal-case tracking-normal ${
+                  className={`chip font-sans normal-case tracking-normal max-sm:min-h-11 max-sm:px-4 max-sm:text-sm ${
                     selected?.id === cl.id
                       ? "bg-[#E2F4F1] text-[#0C8175]"
                       : "bg-white border border-[#E6E8E4] text-[#5B6470]"
@@ -292,9 +292,9 @@ export default async function SchoolDiaryPage({
               </p>
               {autoEntries.length ? (
                 autoEntries.map((e, i) => (
-                  <div key={i} className="px-5 py-2.5 text-sm flex items-center justify-between gap-3">
+                  <div key={i} className="px-4 sm:px-5 py-2.5 text-sm flex items-center justify-between gap-3">
                     <span className="min-w-0 truncate">{e.label}</span>
-                    <span className="chip font-sans normal-case tracking-normal bg-[#EEF0EC] text-[#5B6470] shrink-0">
+                    <span className="chip font-sans normal-case tracking-normal bg-[#EEF0EC] text-[#5B6470] shrink-0 max-w-[50%] truncate">
                       {e.detail}
                     </span>
                   </div>

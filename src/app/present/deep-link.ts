@@ -17,6 +17,9 @@ export type DeepLinkLists = {
   books: Array<{ id: string; chapters: Array<{ num: number }> }>;
   /** Ready-made kits (book-less presentations), by presentation id. */
   kits?: Array<{ id: string }>;
+  /** The student Board (learner mode): her assigned kits, each with every
+   *  assigned piece — `?learn=<any piece>` opens the kit holding it. */
+  learnerKits?: Array<{ id: string; members: string[] }>;
 };
 
 export type PresentDeepLink = {
@@ -40,6 +43,17 @@ export function parsePresentDeepLink(search: string, lists: DeepLinkLists): Pres
 
   const classId = param(q, "class");
   if (classId && lists.classes.some((c) => c.id === classId)) out.classId = classId;
+
+  // `?learn=<generation>` (My lessons' "Learn with SK", 2026-10-31): the
+  // assigned kit holding that piece, on the student Board. Only her own kits.
+  const learn = param(q, "learn");
+  if (learn && lists.learnerKits?.length) {
+    const k = lists.learnerKits.find((x) => x.id === learn) ?? lists.learnerKits.find((x) => x.members.includes(learn));
+    if (k) {
+      out.kitId = k.id;
+      return out;
+    }
+  }
 
   const kitId = param(q, "kit");
   const bookId = param(q, "book");

@@ -6,6 +6,7 @@ import { readManifest } from "@/sk/manifest/store";
 import { deriveAndStore } from "@/sk/manifest/service";
 import { auditSinkFor, recordSafely } from "@/sk/shell/audit";
 import type { SkActionRow } from "@/sk/shell/types";
+import { sharedToMe } from "@/utils/present/learner-server";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -25,11 +26,17 @@ export const maxDuration = 60;
 // client (sk_manifests, artifacts, storage) is created only after the gate.
 // The manifest carries the kit's narration, so the owner check applies to GET
 // as well as POST.
+//
+// THE STUDENT BOARD (learner mode, 2026-10-31): a STUDENT may READ (GET) the
+// map of a generation ASSIGNED to her — one of her generation_shares rows
+// names it, read through her own session. She never builds one: her POST is
+// refused (403), so no derivation is ever spent on a student's behalf; the
+// Board then explains from the deck's text or her books instead.
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 type GateUser = { id: string; email?: string | null; email_confirmed_at?: string | null };
-type Gate = { ok: true; user: GateUser; role: string | null; schoolId: string | null } | { ok: false; status: number; error: string };
+type Gate = { ok: true; user: GateUser; role: string | null; schoolId: string | null; supabase: Awaited<ReturnType<typeof createClient>> } | { ok: false; status: number; error: string };
 
 async function gate(): Promise<Gate> {
   if (!skEnabled()) return { ok: false, status: 404, error: "Not available." };
@@ -42,13 +49,14 @@ async function gate(): Promise<Gate> {
   const role = (profile?.role as string | null) ?? null;
   const schoolId = (profile?.school_id as string | null) ?? null;
   if (!(await skShellEnabledFor(supabase, user, role, schoolId))) return { ok: false, status: 404, error: "Not available." };
-  return { ok: true, user, role, schoolId };
+  return { ok: true, user, role, schoolId, supabase };
 }
 
 type Owned = { ok: true; admin: ReturnType<typeof createAdminClient> } | { ok: false; status: number; error: string };
 
-/** The generation must exist and belong to the caller (or the caller is staff). */
-async function ownedGeneration(user: GateUser, generationId: string): Promise<Owned> {
+/** The generation must exist and belong to the caller (or the caller is staff)
+ *  — or, for a student reading (`read`), be assigned to her. */
+async function ownedGeneration(user: GateUser, generationId: string, read?: { role: string | null; supabase: Awaited<ReturnType<typeof createClient>> }): Promise<Owned> {
   let admin: ReturnType<typeof createAdminClient>;
   try {
     admin = createAdminClient();
@@ -57,6 +65,10 @@ async function ownedGeneration(user: GateUser, generationId: string): Promise<Ow
   }
   const { data: gen } = await admin.from("generations").select("owner_id").eq("id", generationId).maybeSingle();
   if (!gen) return { ok: false, status: 404, error: "Not found." };
+  if (read?.role === "student") {
+    // Read-only, and only what is assigned to her.
+    return (await sharedToMe(read.supabase, generationId)) ? { ok: true, admin } : { ok: false, status: 403, error: "Not yours." };
+  }
   if ((gen.owner_id as string) !== user.id && !presentAllowed(user)) return { ok: false, status: 403, error: "Not yours." };
   return { ok: true, admin };
 }
@@ -66,7 +78,7 @@ export async function GET(request: Request) {
   if (!g.ok) return NextResponse.json({ error: g.error }, { status: g.status });
   const generationId = new URL(request.url).searchParams.get("generationId") ?? "";
   if (!UUID_RE.test(generationId)) return NextResponse.json({ error: "generationId is required." }, { status: 400 });
-  const o = await ownedGeneration(g.user, generationId);
+  const o = await ownedGeneration(g.user, generationId, { role: g.role, supabase: g.supabase });
   if (!o.ok) return NextResponse.json({ error: o.error }, { status: o.status });
   try {
     return NextResponse.json(await readManifest(o.admin, generationId));
@@ -91,6 +103,8 @@ export async function POST(request: Request) {
   const fromBody = body && typeof body === "object" && typeof (body as { generationId?: unknown }).generationId === "string" ? (body as { generationId: string }).generationId : "";
   const generationId = fromBody || new URL(request.url).searchParams.get("generationId") || "";
   if (!UUID_RE.test(generationId)) return NextResponse.json({ error: "generationId is required." }, { status: 400 });
+  // A student never builds a map (read-only learner Board).
+  if (g.role === "student") return NextResponse.json({ error: "Read only." }, { status: 403 });
   const o = await ownedGeneration(g.user, generationId);
   if (!o.ok) return NextResponse.json({ error: o.error }, { status: o.status });
 

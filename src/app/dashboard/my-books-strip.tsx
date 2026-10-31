@@ -51,7 +51,7 @@ export default async function MyBooksStrip({ tiles, t, unavailable }: { tiles: M
           b.chapters && lib ? (
             <ProductBookCard key={b.productId} tile={b} t={lib} />
           ) : (
-            <li key={b.productId} className="flex gap-3 rounded-xl border border-[#E4E7E2] bg-white p-3">
+            <li key={b.productId} className="flex min-w-0 gap-3 rounded-xl border border-[#E4E7E2] bg-white p-3">
               <div className="h-28 w-20 shrink-0 overflow-hidden rounded-md border border-[#E4E7E2]">
                 <MyBookCover url={b.coverUrl} title={b.title} />
               </div>
@@ -67,7 +67,7 @@ export default async function MyBooksStrip({ tiles, t, unavailable }: { tiles: M
                 {b.withdrawn && <p className="mt-1 text-xs text-[#9A6400]">{t.withdrawn}</p>}
                 <div className="mt-auto flex flex-wrap gap-2 pt-2">
                   {b.boardHref && (
-                    <Link href={b.boardHref} className="inline-flex min-h-10 items-center rounded-lg bg-[#1FB8A6] px-3 text-sm font-medium text-white hover:bg-[#0C8175]">
+                    <Link href={b.boardHref} className="inline-flex min-h-11 sm:min-h-10 items-center rounded-lg bg-[#1FB8A6] px-3 text-sm font-medium text-white hover:bg-[#0C8175]">
                       {t.teachOnBoard}
                     </Link>
                   )}
@@ -75,7 +75,7 @@ export default async function MyBooksStrip({ tiles, t, unavailable }: { tiles: M
                     // A plain anchor: the route answers with a redirect to the file (or back here).
                     <a
                       href={b.pdfHref}
-                      className="inline-flex min-h-10 items-center rounded-lg border border-[#D2D6D1] px-3 text-sm font-medium text-[#14181F] hover:bg-[#F5F6F3]"
+                      className="inline-flex min-h-11 sm:min-h-10 items-center rounded-lg border border-[#D2D6D1] px-3 text-sm font-medium text-[#14181F] hover:bg-[#F5F6F3]"
                     >
                       {t.download}
                     </a>

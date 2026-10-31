@@ -90,8 +90,8 @@ export function selectionBlock(slide: Pick<DeckMapSlide, "n" | "title" | "text" 
 }
 
 /** The user turn for the selection call. `language` is the locale's name. */
-export function selectionQuestion(language: string): string {
-  return `Explain the HIGHLIGHTED part of the slide to the class in 2–4 short sentences, in ${language}, using only the slide text and speaker notes in TEACHING. Say what it means and how it fits the slide. No headings, no lists.`;
+export function selectionQuestion(language: string, audience = "the class"): string {
+  return `Explain the HIGHLIGHTED part of the slide to ${audience} in 2–4 short sentences, in ${language}, using only the slide text and speaker notes in TEACHING. Say what it means and how it fits the slide. No headings, no lists.`;
 }
 
 /** Everything the grounding check may accept from the explanation. */

@@ -53,7 +53,7 @@ export default function JunkGateDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-[#14181F]/40" onClick={() => !busy && onCancel()} aria-hidden />
-      <div role="dialog" aria-modal="true" aria-label={title} className="relative card w-full max-w-md p-6 space-y-3">
+      <div role="dialog" aria-modal="true" aria-label={title} className="relative card w-full max-w-md p-6 space-y-3 max-h-[90dvh] overflow-y-auto max-h-[90dvh] overflow-y-auto">
         <h2 className="font-display text-base font-medium">{title}</h2>
 
         <div className="rounded-lg bg-[#FFF1D6] px-3 py-2 text-xs text-[#9A6400]">

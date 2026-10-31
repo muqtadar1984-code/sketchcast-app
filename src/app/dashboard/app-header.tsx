@@ -284,16 +284,66 @@ export default async function AppHeader() {
     languagePicker: i18nOn,
   });
 
+  // The account controls, rendered twice from one place: inline in the bar
+  // from `md` up, and inside the hamburger's panel below it (a phone's bar has
+  // room for the menu, the brand and the bell, and nothing else). Each copy is
+  // only ever on screen at widths where the other is not.
+  const hatSwitcher = hats.length > 1 && activeHat && (
+    <HatSwitcher
+      hats={hats}
+      active={activeHat}
+      labels={t.nav.hats}
+      viewingAs={t.nav.viewingAs}
+      switchLabel={t.nav.switchRoleView}
+    />
+  );
+  const languageSwitcher = i18nOn && <LanguageSwitcher locale={locale} t={t.common} />;
+  // SK S6 slice C: Settings ("SK & privacy") for every signed-in user. An
+  // icon-sized link so it fits the bar at every width; on a phone it is in the
+  // menu, never gone: privacy controls must be reachable from the device a
+  // user actually has.
+  const settingsLink = (tourMark: boolean) =>
+    user && (
+      <Link
+        href="/dashboard/settings"
+        data-tour={tourMark ? "settings-link" : undefined}
+        className="btn-ghost h-9 w-9 shrink-0 inline-flex items-center justify-center text-base"
+        aria-label={t.nav.settings}
+        title={t.nav.settings}
+      >
+        <span aria-hidden>⚙</span>
+      </Link>
+    );
+  const signOut = (
+    <form action="/auth/signout" method="post">
+      <button className="btn-ghost h-9 px-3 text-sm whitespace-nowrap">{t.nav.signOut}</button>
+    </form>
+  );
+
   return (
-    <header className="relative border-b border-[#E6E8E4] bg-gradient-to-b from-[#F5F6F3] to-white">
+    <header className="relative border-b border-[#E6E8E4] bg-gradient-to-b from-[#F5F6F3] to-white pt-[env(safe-area-inset-top)]">
       {/* Full-width bar: the logo alone anchors the left, the tabs float in
           the center (no dead gap), controls sit right, and the SCHOOL identity
           holds the extreme right (its logo joins the name later). On phones
           the tabs are hidden, so a hamburger (far left) opens them as a
-          dropdown — every role's tabs, same source. */}
-      <div className="px-5 h-16 flex items-center gap-3 sm:gap-5">
-        {tabs.length > 0 && (
-          <MobileNav tabs={tabs} openLabel={t.nav.openMenu} closeLabel={t.nav.closeMenu} className={navHide} />
+          dropdown — every role's tabs, same source — with the account
+          controls under them. The side padding never sits inside a landscape
+          notch (physical pl/pr: the safe-area insets are physical too). */}
+      <div className="pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] sm:pl-[max(1.25rem,env(safe-area-inset-left))] sm:pr-[max(1.25rem,env(safe-area-inset-right))] h-16 flex items-center gap-2 sm:gap-5">
+        {user && (
+          <MobileNav
+            tabs={tabs}
+            openLabel={t.nav.openMenu}
+            closeLabel={t.nav.closeMenu}
+            className={tabs.length > 0 ? navHide : "md:hidden"}
+            panelTop="top-full"
+          >
+            {hatSwitcher}
+            {languageSwitcher}
+            {settingsLink(false)}
+            <TourReplayButton label={t.nav.tour} hint={t.nav.takeATour} />
+            {signOut}
+          </MobileNav>
         )}
         {/* The product name is a name, in every language — never translated. */}
         <Link href="/dashboard" className="flex items-center gap-2.5 text-xl font-display shrink-0">
@@ -304,19 +354,15 @@ export default async function AppHeader() {
           {tabs.length > 0 && <HeaderNav tabs={tabs} className={navShow} />}
         </div>
         <div className="flex items-center gap-3 text-sm shrink-0">
-          {hats.length > 1 && activeHat && (
-            <HatSwitcher
-              hats={hats}
-              active={activeHat}
-              labels={t.nav.hats}
-              viewingAs={t.nav.viewingAs}
-              switchLabel={t.nav.switchRoleView}
-            />
-          )}
-          {/* Deliberately NOT hidden on phones like the name beside it: a reader
-              who can't read the current language has to be able to reach this
-              from the device they actually use. */}
-          {i18nEnabled() && <LanguageSwitcher locale={locale} t={t.common} />}
+          {/* Below md these live in the hamburger's panel (above). A signed-out
+              viewer has no menu, so for them nothing moves. */}
+          <div className={`${user ? "hidden md:flex" : "flex"} items-center gap-3`}>
+            {hatSwitcher}
+            {/* Never hidden outright like the name beside it: a reader who
+                can't read the current language has to be able to reach this
+                from the device they actually use — on a phone, in the menu. */}
+            {languageSwitcher}
+          </div>
           {/* The two purely INFORMATIONAL items in this cluster — who you are,
               and which school you're in — are the ones that yield when the bar
               is tight, because everything else beside them is a control you
@@ -349,25 +395,11 @@ export default async function AppHeader() {
               t={t.nav.bell}
             />
           )}
-          {/* SK S6 slice C: Settings ("SK & privacy") for every signed-in
-              user. An icon-sized link so it fits the bar at every width, and
-              never hidden on phones: privacy controls must be reachable from
-              the device a user actually has. */}
-          {user && (
-            <Link
-              href="/dashboard/settings"
-              data-tour="settings-link"
-              className="btn-ghost h-9 w-9 shrink-0 inline-flex items-center justify-center text-base"
-              aria-label={t.nav.settings}
-              title={t.nav.settings}
-            >
-              <span aria-hidden>⚙</span>
-            </Link>
-          )}
-          <TourReplayButton label={t.nav.tour} hint={t.nav.takeATour} />
-          <form action="/auth/signout" method="post">
-            <button className="btn-ghost h-9 px-3 text-sm whitespace-nowrap">{t.nav.signOut}</button>
-          </form>
+          <div className={`${user ? "hidden md:flex" : "flex"} items-center gap-3`}>
+            {settingsLink(true)}
+            <TourReplayButton label={t.nav.tour} hint={t.nav.takeATour} />
+            {signOut}
+          </div>
           {/* Logical inset/border (ps-/ms-/border-s) so the school's divider sits
               on the correct side once <html dir="rtl"> mirrors the bar. */}
           {schoolName && (

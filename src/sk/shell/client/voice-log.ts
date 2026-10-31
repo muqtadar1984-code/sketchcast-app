@@ -107,7 +107,10 @@ export function beaconVoiceEvents(events: VoiceEvent[]): void {
 //   ms       the wait: from the navigation to the highlight (shown) or to the
 //            skip; for "away", how long the stop had been on screen
 
-export type TourOutcome = "shown" | "missing" | "cap" | "away";
+//   2026-10-31: "abandoned" — the stop's wait was cut off before it decided
+//   (the run paused, moved or ended under it); `error` names the run's state.
+
+export type TourOutcome = "shown" | "missing" | "cap" | "away" | "abandoned";
 
 /** A skip's reason: the settled-page wait gives up at its cap, otherwise it
  *  only ever skips a page that settled without the anchor. */
@@ -137,4 +140,29 @@ export function tourEvent(o: { stop: string; route: string; outcome: TourOutcome
     error: `${route} ${page}`,
     ms: Math.max(0, Math.round(o.ms)),
   };
+}
+
+// ── the tour's START (2026-10-31) ───────────────────────────────────────────
+// Founder: "Hi SK, show me around" by microphone started nothing. The server
+// log had the turn (model → start_tour → the `walkthrough` event) and the voice
+// log had SK saying "Here's the tour…", then nothing for five minutes: no
+// stop, no skip. Every step between the event and stop 1 now reports:
+//
+//   k        "walk"
+//   provider who asked: "turn-voice" | "turn-text" | "phrase" | "menu" |
+//            "bus" (the header 🧭) | "auto" | "retry"
+//   why      "asked" | "joined" (one already starting) | "ready" | "empty" |
+//            "aborted" | "failed" | "retry" | "no-run" (the retry found nothing)
+//   ok       true for "asked" and "ready"
+//   error    "stops=<n>", the failure's message, or the run's state
+//   ms       since the start was asked
+
+export type WalkVia = "turn-voice" | "turn-text" | "phrase" | "menu" | "bus" | "auto" | "retry";
+
+export function walkEvent(o: { via: WalkVia; why: string; ms?: number; stops?: number; error?: string }): Omit<VoiceEvent, "t"> {
+  const e: Omit<VoiceEvent, "t"> = { k: "walk", provider: o.via, why: o.why, ok: o.why === "asked" || o.why === "ready" };
+  const error = o.stops !== undefined ? `stops=${o.stops}` : o.error;
+  if (error) e.error = error.slice(0, STR);
+  if (o.ms !== undefined) e.ms = Math.max(0, Math.round(o.ms));
+  return e;
 }

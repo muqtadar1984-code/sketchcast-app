@@ -24,7 +24,7 @@ export function SchoolAssistantLauncher({ t }: { t: BriefingMessages }) {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <div className="fixed bottom-4 end-4 z-40">
+      <div className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] end-4 z-40">
         {/* Collapsed to its mark, expanding on hover/focus — the same treatment
             as the teaching Assistant and "Report a problem", so no floating
             control sits over the content column. The drawn mark replaces an
@@ -234,36 +234,39 @@ function SchoolAssistantPanel({ t, onClose }: { t: BriefingMessages; onClose: ()
   const showStarters = ready === true && !busy && !messages.some((m) => !m.greeting);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-      <div className="card w-full max-w-lg flex flex-col max-h-[86dvh]" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-5 py-3 border-b border-[#EEF0EC]">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 sm:p-4" onClick={onClose}>
+      <div
+        className="card w-full max-w-lg flex flex-col max-h-[92dvh] sm:max-h-[86dvh] max-sm:rounded-b-none"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between gap-2 ps-4 sm:ps-5 pe-2 sm:pe-5 py-2 sm:py-3 border-b border-[#EEF0EC]">
           <div className="min-w-0">
             <div className="font-display font-medium flex items-center gap-1.5">
               <span aria-hidden>🗒️</span> {t.launcher}
             </div>
             <div className="text-xs text-[#98A0A9]">{t.subtitle}</div>
           </div>
-          <div className="flex items-center gap-3 shrink-0">
+          <div className="flex items-center sm:gap-3 shrink-0">
             {speaking ? (
-              <button onClick={stopSpeaking} className="text-xs font-medium text-[#B42318] hover:underline" title={t.stopReading}>
+              <button onClick={stopSpeaking} className="min-h-11 sm:min-h-0 px-2 sm:px-0 text-xs font-medium text-[#B42318] hover:underline" title={t.stopReading}>
                 ■ {t.stop}
               </button>
             ) : (
               <button
                 onClick={toggleReadAloud}
                 aria-pressed={readAloud}
-                className={`text-xs font-medium ${readAloud ? "text-[#0C8175]" : "text-[#98A0A9]"} hover:underline`}
+                className={`min-h-11 sm:min-h-0 px-2 sm:px-0 text-xs font-medium ${readAloud ? "text-[#0C8175]" : "text-[#98A0A9]"} hover:underline`}
               >
                 {readAloud ? "🔊" : "🔈"} {t.readAloud}
               </button>
             )}
-            <button onClick={onClose} className="text-[#98A0A9] hover:text-[#5B6470] text-lg leading-none" aria-label={t.close}>
+            <button onClick={onClose} className="size-11 sm:size-auto inline-flex items-center justify-center text-[#98A0A9] hover:text-[#5B6470] text-2xl sm:text-lg leading-none" aria-label={t.close}>
               ×
             </button>
           </div>
         </div>
 
-        <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+        <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 sm:px-5 py-4 space-y-3">
           {ready === null && <p className="text-sm text-[#98A0A9]">{t.reading}</p>}
           {messages.map((m, i) => (
             <div key={i} className={m.role === "you" ? "flex justify-end" : "flex flex-col items-start"}>
@@ -282,7 +285,7 @@ function SchoolAssistantPanel({ t, onClose }: { t: BriefingMessages; onClose: ()
                 <button
                   key={s}
                   onClick={() => void submit(s)}
-                  className="chip font-sans bg-[#E2F4F1] text-[#0C8175] hover:bg-[#D2ECE8] cursor-pointer"
+                  className="chip font-sans bg-[#E2F4F1] text-[#0C8175] hover:bg-[#D2ECE8] cursor-pointer max-sm:min-h-11 max-sm:px-3.5 max-sm:text-sm max-sm:text-start"
                 >
                   {s}
                 </button>
@@ -292,7 +295,7 @@ function SchoolAssistantPanel({ t, onClose }: { t: BriefingMessages; onClose: ()
           {error && <p className="text-xs text-[#B42318]">{error}</p>}
         </div>
 
-        <div className="px-4 py-3 border-t border-[#EEF0EC]">
+        <div className="px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] border-t border-[#EEF0EC]">
           <form
             className="flex items-center gap-2"
             onSubmit={(e) => {
@@ -307,7 +310,7 @@ function SchoolAssistantPanel({ t, onClose }: { t: BriefingMessages; onClose: ()
                 disabled={ready !== true}
                 aria-pressed={listening}
                 title={listening ? t.micStop : t.micStart}
-                className={`h-9 w-9 rounded-lg border text-base shrink-0 disabled:opacity-40 ${
+                className={`size-11 sm:size-9 rounded-lg border text-base shrink-0 disabled:opacity-40 ${
                   listening ? "border-[#B42318] text-[#B42318] animate-pulse" : "border-[#E6E8E4] text-[#5B6470]"
                 }`}
               >
@@ -321,9 +324,9 @@ function SchoolAssistantPanel({ t, onClose }: { t: BriefingMessages; onClose: ()
               maxLength={600}
               disabled={ready !== true}
               placeholder={listening ? t.listening : ready === null ? t.loading : t.placeholder}
-              className="field h-9 px-3 text-sm flex-1"
+              className="field h-11 sm:h-9 px-3 text-base sm:text-sm flex-1 min-w-0"
             />
-            <button type="submit" disabled={busy || !input.trim() || ready !== true} className="btn-primary h-9 px-4 text-sm disabled:opacity-50">
+            <button type="submit" disabled={busy || !input.trim() || ready !== true} className="btn-primary h-11 sm:h-9 px-4 text-sm disabled:opacity-50">
               {busy ? "…" : t.ask}
             </button>
           </form>

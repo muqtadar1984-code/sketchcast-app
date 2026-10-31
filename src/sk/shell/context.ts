@@ -253,6 +253,7 @@ export function buildContext(input: BuildContextInput): SkContext {
   const collector = input.collector ?? null;
   const path = str(collector?.path, 300) ?? "/dashboard";
   const locale = str(input.locale ?? collector?.locale, 10) ?? "en";
+  const board = sanitizeBoard(collector?.board);
   const user: SkContextUser = {
     id: input.user.id,
     email: input.user.email,
@@ -269,10 +270,16 @@ export function buildContext(input: BuildContextInput): SkContext {
     ...(input.children?.length ? { children: input.children.map((c) => ({ ...c })) } : {}),
     place: { path, page: pageFor(path), params: sanitizeParams(collector?.params) },
     selection: sanitizeSelection(collector?.selection),
-    board: sanitizeBoard(collector?.board),
+    board,
     tutor: sanitizeTutor(collector?.tutor),
     recent: { entities: [], lastToolResults: [] },
-    flags: { ...input.flags, hasScope: input.coordinatorScope.length > 0 },
+    // The student Board (learner mode, 2026-10-31): a student never drives a
+    // teacher's Board, so for her the `board` flag means exactly "her OWN
+    // Board is open" (a learner session in the collector) — the board.*
+    // moves listed for students (shell/learner.ts) are hers only then. Every
+    // caller of loadContext has already passed the SK Shell gate, which is the
+    // learner Board's gate too.
+    flags: { ...input.flags, ...(role === "student" ? { board: !!board?.sessionId } : {}), hasScope: input.coordinatorScope.length > 0 },
     issuedAt: input.now.toISOString(),
     ttlSeconds: input.ttlSeconds ?? SK_CONTEXT_TTL_SECONDS,
     contextHash: contextHash({ role, schoolId: input.schoolId, hat, plan, scope: input.coordinatorScope }),
@@ -392,6 +399,7 @@ export async function loadContext(deps: LoadContextDeps): Promise<SkContext> {
     hat = resolveHat(isHat(cookie) ? cookie : null, hats);
   }
 
+  // (A student's `board` flag is decided in buildContext: her own Board open.)
   const board = presentAccess({ role, tier: plan === "unknown" ? null : plan, override: presentAllowed(deps.user) }).ok;
 
   return buildContext({

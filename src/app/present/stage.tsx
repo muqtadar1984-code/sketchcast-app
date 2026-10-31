@@ -6,6 +6,7 @@ import {
   useEffect,
   useImperativeHandle,
   useRef,
+  useSyncExternalStore,
   type CSSProperties,
 } from "react";
 import type { VideoLike } from "./board-controller";
@@ -100,6 +101,53 @@ export type StageProps = {
  * their rights to deprioritise or unload media that is not being displayed.
  * Nothing here may risk the video's position.
  */
+// ── the phone layout (SK student Board plan 2026-10-31, phase 1) ─────────────
+//
+// At phone width (< 640 px) a full-screen video would hide the roll, the page
+// counter and SK. So there, and only there, "full" puts the stage IN THE FLOW:
+// sticky at the top of the Board's (single) column, 16:9 across its width,
+// first in the column (`order: -1`), with the roll scrolling below it. The
+// element is the same one — only its style changes, so the video never
+// reloads. "corner" and "away" stay fixed, a little larger in the corner. On
+// a wider screen nothing here applies: the styles below are exactly the
+// desktop ones they always were.
+export const PHONE_QUERY = "(max-width: 639px)";
+
+function subscribePhone(cb: () => void): () => void {
+  if (typeof window === "undefined" || !window.matchMedia) return () => {};
+  const mq = window.matchMedia(PHONE_QUERY);
+  mq.addEventListener?.("change", cb);
+  return () => mq.removeEventListener?.("change", cb);
+}
+const phoneSnapshot = (): boolean => (typeof window !== "undefined" && !!window.matchMedia ? window.matchMedia(PHONE_QUERY).matches : false);
+/** The server renders the desktop Board; the phone layout follows on the client. */
+const phoneServerSnapshot = (): boolean => false;
+
+/** True at phone width (PHONE_QUERY); false on the server and on wider screens. */
+export function usePhoneLayout(): boolean {
+  return useSyncExternalStore(subscribePhone, phoneSnapshot, phoneServerSnapshot);
+}
+
+/** Where the stage sits on a phone: in the flow while full, else as on desktop
+ *  (the corner a little larger, so a thumb can tap it to come back). */
+export function phoneStyleFor(mode: StageMode): CSSProperties {
+  const desktop = styleFor(mode);
+  if (mode === "full") {
+    return {
+      position: "sticky",
+      top: 0,
+      zIndex: 30,
+      order: -1,
+      width: "100%",
+      aspectRatio: "16 / 9",
+      overflow: "hidden",
+      borderRadius: 12,
+      background: "#000",
+    };
+  }
+  return { ...desktop, width: "44vw", height: "24.75vw" };
+}
+
 function styleFor(mode: StageMode): CSSProperties {
   const base: CSSProperties = {
     position: "fixed",
@@ -144,6 +192,7 @@ export const Stage = forwardRef<StageHandle, StageProps>(function Stage(
   ref,
 ) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const phone = usePhoneLayout();
   const source = stageSource(src, youtubeId);
   const ytHost = useRef<HTMLDivElement | null>(null);
   const yt = useRef<YouTubeVideo | null>(null);
@@ -250,7 +299,7 @@ export const Stage = forwardRef<StageHandle, StageProps>(function Stage(
   );
 
   return (
-    <div style={styleFor(mode)} data-stage-mode={mode}>
+    <div style={phone ? phoneStyleFor(mode) : styleFor(mode)} data-stage-mode={mode} data-stage-phone={phone ? "1" : undefined}>
       {/*
         RENDERED UNCONDITIONALLY. Not behind `src &&`, not behind a mode check:
         a <video> that disappears from the tree when the src is briefly null, or

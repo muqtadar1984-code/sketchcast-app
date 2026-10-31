@@ -40,7 +40,7 @@ export default function DiaryDay({
             <button
               key={cl.id}
               onClick={() => go(cl.id, date)}
-              className={`chip font-sans normal-case tracking-normal ${
+              className={`chip font-sans normal-case tracking-normal pointer-coarse:min-h-11 pointer-coarse:px-3 ${
                 cl.id === classId ? "bg-[#E2F4F1] text-[#0C8175]" : "bg-[#EEF0EC] text-[#5B6470] hover:bg-[#E6E8E4]"
               }`}
             >
@@ -64,7 +64,7 @@ export default function DiaryDay({
           <span className="rtl-flip">→</span>
         </button>
         {date !== today && (
-          <button onClick={() => go(classId, today)} className="text-sm font-medium text-[#0C8175] hover:underline ms-1">
+          <button onClick={() => go(classId, today)} className="text-sm font-medium text-[#0C8175] hover:underline ms-1 pointer-coarse:inline-flex pointer-coarse:items-center pointer-coarse:min-h-11">
             {t.today}
           </button>
         )}

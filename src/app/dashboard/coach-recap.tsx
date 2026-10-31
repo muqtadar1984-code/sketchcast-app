@@ -48,14 +48,14 @@ export default function CoachRecap({ studentId, generationId }: { studentId: str
 
   return (
     <div className="text-xs">
-      <button onClick={load} disabled={busy} className="font-medium text-[#0C8175] hover:underline disabled:opacity-50">
+      <button onClick={load} disabled={busy} className="inline-flex items-center min-h-11 sm:min-h-0 font-medium text-[#0C8175] hover:underline disabled:opacity-50">
         {busy ? "Loading recap…" : open ? "Hide coach recap" : "Coach recap"}
       </button>
       {error && <span className="ms-2 text-[#B42318]">{error}</span>}
 
       {open && data && (
         <div className="mt-2 rounded-lg bg-[#FAFBF9] border border-[#EEF0EC] px-3 py-2 space-y-1.5">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className={`chip font-sans normal-case tracking-normal ${BAND_TONE[data.mastery.band] ?? BAND_TONE.not_started}`}>
               {data.mastery.label}
               {data.mastery.score != null ? ` · ${data.mastery.score}` : ""}
@@ -68,7 +68,7 @@ export default function CoachRecap({ studentId, generationId }: { studentId: str
               <div className="text-[#5B6470] font-medium">Still shaky on:</div>
               <ul className="list-disc ps-4 text-[#5B6470]">
                 {data.weakQuestions.slice(0, 3).map((q, i) => (
-                  <li key={i} className="truncate">{q}</li>
+                  <li key={i} className="break-words sm:truncate">{q}</li>
                 ))}
               </ul>
             </div>

@@ -5,7 +5,7 @@
 // print:hidden so the button never appears on the record it prints.
 export default function PrintButton({ label }: { label: string }) {
   return (
-    <button onClick={() => window.print()} className="btn-primary h-9 px-4 text-sm print:hidden">
+    <button onClick={() => window.print()} className="btn-primary h-11 sm:h-9 px-4 text-sm print:hidden">
       {label}
     </button>
   );

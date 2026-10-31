@@ -123,7 +123,7 @@ export default function InviteManager({
   // dead form with an empty Role select.
   if (roleOpts.length === 0) {
     return (
-      <div className="card p-5 mb-6">
+      <div className="card p-4 sm:p-5 mb-6">
         <p className="text-sm text-[#5B6470]">
           Invites aren&apos;t available right now — teacher and admin accounts are managed by
           SketchCast, and parent invites are switched off for this deployment. Contact support to
@@ -135,9 +135,9 @@ export default function InviteManager({
 
   return (
     <>
-      <div className="card p-5 mb-6">
+      <div className="card p-4 sm:p-5 mb-6">
         <div className="flex flex-wrap items-end gap-2">
-          <label className="block">
+          <label className="block w-full sm:w-auto">
             <span className="text-xs text-[#5B6470]">Email</span>
             <input
               type="email"
@@ -147,15 +147,15 @@ export default function InviteManager({
                 setError(null);
               }}
               placeholder={role === "parent" ? "parent@example.com" : "colleague@school.edu"}
-              className="field block h-9 px-3 mt-1 text-sm w-64"
+              className="field block h-11 sm:h-9 px-3 mt-1 text-base sm:text-sm w-full sm:w-64"
             />
           </label>
-          <label className="block">
+          <label className="block flex-1 sm:flex-none">
             <span className="text-xs text-[#5B6470]">Role</span>
             <select
               value={role}
               onChange={(e) => setRole(e.target.value)}
-              className="field block h-9 px-2 mt-1 text-sm"
+              className="field block h-11 sm:h-9 px-2 mt-1 text-base sm:text-sm w-full sm:w-auto"
             >
               {roleOpts.map((o) => (
                 <option key={o.value} value={o.value}>
@@ -164,7 +164,7 @@ export default function InviteManager({
               ))}
             </select>
           </label>
-          <button onClick={create} disabled={busy || !email.trim()} className="btn-primary h-9 px-4 text-sm">
+          <button onClick={create} disabled={busy || !email.trim()} className="btn-primary h-11 sm:h-9 px-4 text-sm">
             {busy ? "…" : "Create invite"}
           </button>
         </div>
@@ -177,7 +177,7 @@ export default function InviteManager({
             {students.length === 0 ? (
               <p className="text-xs text-[#9A6400]">No students in your school yet.</p>
             ) : (
-              <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto">
+              <div className="flex flex-wrap gap-1.5 max-h-48 sm:max-h-36 overflow-y-auto">
                 {sortedStudents.map((s) => {
                   const suggested = emailLc && (s.parentEmail ?? "").toLowerCase() === emailLc;
                   const on = childIds.includes(s.id);
@@ -185,7 +185,7 @@ export default function InviteManager({
                     <button
                       key={s.id}
                       onClick={() => toggleChild(s.id)}
-                      className={`chip font-sans normal-case tracking-normal ${
+                      className={`chip font-sans normal-case tracking-normal max-sm:min-h-10 max-sm:px-3.5 max-sm:text-sm ${
                         on
                           ? "bg-[#14181F] text-white"
                           : suggested
@@ -213,11 +213,11 @@ export default function InviteManager({
                 readOnly
                 value={link}
                 onFocus={(e) => e.target.select()}
-                className="field flex-1 h-8 px-2 text-xs"
+                className="field flex-1 min-w-0 h-11 sm:h-8 px-2 text-base sm:text-xs"
               />
               <button
                 onClick={() => navigator.clipboard?.writeText(link)}
-                className="btn-ghost h-8 px-3 text-xs whitespace-nowrap"
+                className="btn-ghost h-11 sm:h-8 px-3 text-sm sm:text-xs whitespace-nowrap"
               >
                 Copy
               </button>
@@ -239,19 +239,19 @@ export default function InviteManager({
             const status = accepted ? "accepted" : expired ? "expired" : "pending";
             const tone = accepted ? "text-[#0C8175]" : expired ? "text-[#9A6400]" : "text-[#5B6470]";
             return (
-              <div key={iv.id} className="px-5 py-3 flex items-center justify-between gap-3">
+              <div key={iv.id} className="px-4 sm:px-5 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-3">
                 <span className="min-w-0 truncate">
                   <span className="font-medium">{iv.email}</span>
                   <span className="chip bg-[#EEF0EC] text-[#5B6470] normal-case tracking-normal ms-2">
                     {ROLE_LABEL[iv.role] ?? iv.role}
                   </span>
                 </span>
-                <span className="flex items-center gap-3 shrink-0 text-xs">
+                <span className="flex items-center gap-3 sm:shrink-0 text-xs">
                   <span className={tone}>{status}</span>
                   {status === "pending" && (
                     <button
                       onClick={() => navigator.clipboard?.writeText(linkFor(iv.token))}
-                      className="text-[#0C8175] hover:underline"
+                      className="min-h-11 sm:min-h-0 text-[#0C8175] hover:underline"
                     >
                       Copy link
                     </button>

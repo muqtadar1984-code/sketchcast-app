@@ -156,7 +156,8 @@
       "partLoadFailed": "La partie {n} n'a pas pu se charger — ferme cette fenêtre et actualise la page pour réessayer.",
       "multiPartHint": "Partie {n} sur {total} (~15 min). Termine une partie pour la valider — la dernière termine la leçon.",
       "singlePartHint": "Regarde jusqu'au bout pour valider cette leçon."
-    }
+    },
+    "learnWithSk": "Apprendre avec SK"
   },
   "app": {
     "auth": {
@@ -2077,6 +2078,73 @@
       "notTeaching": "Le tableau de la classe est réservé aux enseignants.",
       "plan": "Le tableau de la classe est inclus avec Pro, Pro+ et toutes les formules établissement.",
       "back": "Retour à votre bibliothèque"
+    },
+    "learn": {
+      "title": "Mes leçons",
+      "pick": "Choisis une leçon pour apprendre avec SK.",
+      "empty": "Pas encore de leçon. Quand ton enseignant t'en donnera une, elle apparaîtra ici.",
+      "due": "À rendre le {date}",
+      "overdue": "Était à rendre le {date}",
+      "back": "Retour à mes leçons",
+      "close": "Fermer",
+      "loading": "Ouverture de ta leçon…",
+      "failed": "Impossible d'ouvrir cette leçon. Réessaie dans un instant.",
+      "prevPage": "Page précédente",
+      "nextPage": "Page suivante",
+      "steps": {
+        "video": "Vidéo",
+        "slides": "Diapositives",
+        "worksheet": "Fiche d'exercices"
+      },
+      "go": {
+        "video": "▶ Lancer la vidéo",
+        "slides": "Ouvrir les diapositives",
+        "worksheet": "Ouvrir la fiche",
+        "next": "Étape suivante"
+      },
+      "sk": {
+        "startVideo": "Salut ! Commençons par la vidéo. Appuie sur lecture quand tu es prêt, et pose-moi tes questions quand tu veux.",
+        "startSlides": "Salut ! Commençons par les diapositives. Pose-moi tes questions quand tu veux.",
+        "startWorksheet": "Salut ! Regardons la fiche d'exercices ensemble. Demande-moi si tu bloques.",
+        "toSlides": "Bravo ! Maintenant, parcourons les diapositives.",
+        "toWorksheet": "Super travail ! Maintenant, essayons la fiche d'exercices.",
+        "slidesOpen": "Voici les diapositives. Surligne la partie que tu veux que je t'explique.",
+        "slidesMissing": "Les diapositives ne sont pas encore prêtes, passons à la fiche d'exercices.",
+        "worksheetOpen": "Voici la fiche d'exercices. Lis chaque question et essaie. Demande-moi si tu bloques.",
+        "worksheetFailed": "Je n'ai pas pu ouvrir la fiche pour l'instant. Tu peux quand même me poser tes questions.",
+        "done": "C'est toute la leçon. Bravo ! Pose-moi une question sur ce qui n'est pas clair.",
+        "empty": "Cette leçon n'a encore rien à montrer. Tu peux quand même me poser une question."
+      },
+      "practice": {
+        "answerLabel": "Ta réponse",
+        "placeholder": "Écris ta réponse",
+        "check": "Vérifier",
+        "checking": "Vérification…",
+        "help": "J'ai besoin d'aide",
+        "choose": "Choisis…",
+        "correct": "Correct ! Bravo.",
+        "incorrect": "Pas tout à fait. Essaie encore.",
+        "shown": "Voici la réponse. Lis-la, puis essaie de l'écrire.",
+        "review": "Envoyée à ton enseignant pour correction.",
+        "failed": "Je n'ai pas pu vérifier pour l'instant. Réessaie.",
+        "slowDown": "Un instant : cette réponse est encore en cours de vérification.",
+        "next": "Question suivante",
+        "score": "Ton score : {correct}/{total}",
+        "hintOne": "1 indice",
+        "hintMany": "{n} indices",
+        "wellDone": "Bravo ! Tu as terminé la fiche d'exercices. Pose-moi des questions sur ce que tu veux revoir.",
+        "keepGoing": "Bel effort ! Continuons à nous entraîner. Pose-moi des questions sur celles qui t'ont paru difficiles.",
+        "rung": {
+          "hint": "Indice",
+          "step": "Étape résolue",
+          "answer": "Réponse"
+        },
+        "generic": {
+          "hint": "Relis lentement la question et cherche les mots importants.",
+          "step": "Découpe-la en petites étapes. Que sais-tu déjà, et que demande la question ?",
+          "answer": "Compare cette réponse avec la tienne et regarde où elles diffèrent."
+        }
+      }
     }
   },
   "kits": {
@@ -2163,6 +2231,13 @@
         "sources": "Sources",
         "chapter": "chap. {n}",
         "from": "Source : {source}"
+      },
+      "teach": {
+        "gapNote": "Celle-ci a l'air difficile — je vais t'expliquer autrement.",
+        "extraOffer": "Bravo — tu as terminé cette leçon ! Tu veux une petite étape bonus pour aller un peu plus loin ?",
+        "extraYes": "Montre-moi",
+        "extraNo": "Pas maintenant",
+        "pictureFrom": "Tiré des diapositives de ta leçon — diapositive {n}"
       },
       "gap": {
         "thumb": "Cela ne m'a pas aidé",
@@ -2692,7 +2767,7 @@
         "downloadsNone": "Chaque élément se téléchargera prêt à modifier, avec son propre corrigé.",
         "rerun": "Le petit crayon refait un élément contre des crédits ; ceux qui l'ont déjà reçu gardent leur copie.",
         "rerunNone": "Son petit crayon refait un seul élément, et le × le supprime.",
-        "assign": "Attribuer envoie ce kit à une classe avec une date de remise, ou dites « attribue la fiche à la 5A pour vendredi ».",
+        "assign": "Attribuer envoie ce kit à une classe avec une date de remise ; les élèves l'apprennent ensuite avec moi sur leur propre Tableau.",
         "assignChapter": "Attribuer le chapitre envoie tout ce qui y est prêt à une classe, avec une date de remise.",
         "assignNone": "Dès qu'un kit est généré, vous pourrez l'attribuer à une classe d'ici.",
         "boardBridge": "Les kits générés passent aussi sur le Tableau, que nous verrons tout à l'heure.",
@@ -2736,6 +2811,12 @@
         "openLessonEmpty": "Rien n'est encore attribué ; les leçons de ton enseignant arriveront ici.",
         "progress": "Ici, tu vois ce qui est fini et ce qui reste ; pour les fiches, photographie tes réponses, et les quiz se corrigent aussitôt.",
         "progressEmpty": "Dès que tu as du travail, ceci suit ce qui est fini et ce qui reste.",
+        "learnWithSk": "Apprendre avec SK ouvre cette leçon sur ton propre Tableau, où je te l'enseigne.",
+        "learnWithSkEmpty": "Quand une leçon arrive, Apprendre avec SK l'ouvre sur ton propre Tableau, où je te l'enseigne.",
+        "learnBoard": "Ici, je mène chaque leçon : vidéo, diapositives, puis fiche d'exercices, {learnAsk}et tu peux me demander n'importe quoi ou surligner des mots pour poser une question. {learnPractice}Sur la fiche, touche Vérifier ou « J'ai besoin d'aide » ; si c'est encore difficile, je te l'explique autrement dans notre conversation.",
+        "learnSteps": "Ici, je mène chaque leçon : vidéo, puis diapositives, puis fiche d'exercices.",
+        "learnAsk": "Demande-moi n'importe quoi, ou surligne des mots au tableau pour poser une question.",
+        "learnPractice": "Sur la fiche, touche Vérifier ou « J'ai besoin d'aide » ; si c'est encore difficile, je te l'explique autrement dans notre conversation.",
         "myBooks": "Mes livres contient tes livres SketchCast ; dis « active mon code de livre » pour en ajouter.",
         "myBooksNone": "Tes livres SketchCast arriveront dans Mes livres ; dis « active mon code de livre » pour en ajouter un.",
         "diaryTimetable": "La barre du haut contient le carnet de ta classe et ton emploi du temps.",
@@ -2749,7 +2830,7 @@
       },
       "parent": {
         "hello": "Je suis SK, pour vous aider à suivre vos enfants : touchez pour m'entendre.",
-        "childCard": "Chaque carte montre le travail, les échéances, les notes et les remarques de l'enseignant.",
+        "childCard": "Chaque carte montre le travail, les échéances, les notes et les remarques ; votre enfant peut apprendre avec moi, et vous verrez ses progrès.",
         "childUnverified": "Ce lien attend la vérification de l'école ; d'ici là, je ne peux pas parler de cet enfant.",
         "week": "Cette semaine : ce qui est fait, en retard ou à corriger, plus les nouvelles notes du carnet.",
         "weekSteps": "En dessous, jusqu'à deux actions ; demandez « comment vont mes enfants ? » à tout moment.",

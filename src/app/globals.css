@@ -407,3 +407,74 @@ summary:focus-visible {
   outline-offset: 2px;
   border-radius: 4px;
 }
+
+/* ── Phones (and the app-store wrappers that will host the app) ────────────
+   Everything here is scoped so a desktop with a mouse renders exactly as
+   before: either to a coarse pointer (a finger) or to a phone-width viewport.
+
+   Don't let iOS inflate text on rotation; the layout sizes its own type. */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* A finger needs 44px. Every button and field in the app wears one of these
+   utilities, so raising their FLOOR here reaches all of them without touching
+   the dense h-8/h-9 sizes a mouse is happy with: min-height wins over a
+   smaller explicit height. It lives in the components layer so a utility on
+   the element (min-h-0, say) can still overrule it — and it sets nothing but
+   the floor, because an unlayered `display` here would beat `hidden`. */
+@layer components {
+  @media (pointer: coarse) {
+    .btn-primary,
+    .btn-ghost,
+    .field {
+      min-height: 44px;
+    }
+  }
+}
+
+/* Inputs never drop below 16px on a phone or any touch screen: anything
+   smaller makes iOS Safari zoom the whole page in on focus and leave it
+   zoomed. Every input, not only .field — plenty of fields are hand-styled.
+   Deliberately UNlayered, so it beats the text-sm/text-xs they carry; max()
+   keeps a field that is already bigger at its own size. */
+@media (max-width: 639px), (pointer: coarse) {
+  input,
+  select,
+  textarea {
+    font-size: max(16px, 1em);
+  }
+}
+
+/* The floating corner widgets — SK's figure, the Assistant launcher, "Report a
+   problem", the feedback chip — sit clear of the home indicator and of a
+   landscape notch. A margin, not a new bottom/inset, so each widget keeps the
+   offset classes it already has (and the tests that pin them). */
+[data-sk="launcher"]:not([data-sk-board]),
+[data-corner] {
+  margin-bottom: env(safe-area-inset-bottom, 0px);
+  margin-inline: env(safe-area-inset-left, 0px) env(safe-area-inset-right, 0px);
+}
+
+@media (max-width: 639px) {
+  /* No sideways page scroll on a phone, whatever one wide child does. `clip`
+     rather than `hidden`: it creates no scroll container, so sticky elements
+     and the fixed corner widgets keep working. Wide content that is MEANT to
+     scroll (tables, the timetable) has its own overflow-x-auto box. */
+  html,
+  body {
+    overflow-x: clip;
+  }
+
+  /* The corner widgets float over the page, so the last thing on it would sit
+     underneath them with nowhere to scroll. Reserve room below the content:
+     SK's standing figure is 112px tall at bottom-4, the round launchers 44px. */
+  body:has([data-corner]) {
+    padding-bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
+  }
+  /* Not on the Board: /present lays itself out (its own phone layout). */
+  body:has([data-sk="launcher"]:not([data-sk-board])) {
+    padding-bottom: calc(8.5rem + env(safe-area-inset-bottom, 0px));
+  }
+}

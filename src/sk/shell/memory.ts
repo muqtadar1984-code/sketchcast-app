@@ -23,6 +23,8 @@ export const SK_MEMORY_LAST_ANSWER_CHARS = 4000;
 /** S2 tray: how many announced kit ids the blob keeps (newest first). 20 uuids
  *  ≈ 1 KB of the blob's 64 000-character ceiling. */
 export const SK_MEMORY_MAX_ANNOUNCED = 20;
+/** 2026-10-31: concepts SK taught this conversation (learn-teach.ts SK_TAUGHT_MAX). */
+export const SK_MEMORY_MAX_TAUGHT = 8;
 const ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 
 export type SkMemoryTurn = { role: "user" | "assistant"; text: string };
@@ -78,6 +80,14 @@ export type SkMemory = {
   /** 2026-10-30: the unsupported source language SK already said it cannot
    *  answer in — said once per conversation. */
   langNoted?: string;
+  /** 2026-10-31 (student Board phase 3): the concepts SK taught in THIS
+   *  conversation, newest first (learn-teach.ts addTaught) — the next lesson
+   *  uses a fresh example. Concept names only, never her answers. */
+  taught?: string[];
+  /** 2026-10-31: the check question SK just asked at the end of a lesson —
+   *  her next message is read as its answer (one turn, like `offer`). SK's
+   *  own practice question; never a worksheet item or its answer. */
+  teachCheck?: { concept: string; question: string };
 };
 
 let processSecret: string | null = null;
@@ -147,6 +157,12 @@ export function verifyMemory(blob: string | null | undefined): SkMemory | null {
     if (!isAnswerLang(m.langOverride)) delete out.langOverride;
     if (typeof m.langNoted === "string" && m.langNoted.length <= 40) out.langNoted = m.langNoted;
     else delete out.langNoted;
+    const taught = Array.isArray(m.taught) ? m.taught.filter((x): x is string => typeof x === "string" && !!x.trim()).map((x) => x.slice(0, 80)).slice(0, SK_MEMORY_MAX_TAUGHT) : [];
+    if (taught.length) out.taught = taught;
+    else delete out.taught;
+    const tc = m.teachCheck as Record<string, unknown> | undefined;
+    if (tc && typeof tc.concept === "string" && typeof tc.question === "string" && tc.question.trim()) out.teachCheck = { concept: tc.concept.slice(0, 160), question: tc.question.slice(0, 400) };
+    else delete out.teachCheck;
     return out;
   } catch {
     return null;
@@ -194,6 +210,10 @@ export function rememberTurn(
     lastAnswer?: SkLastAnswer | null;
     langOverride?: SkAnswerLang | null;
     langNoted?: string;
+    /** 2026-10-31: the conversation's taught concepts after this turn (replaces). */
+    taught?: string[];
+    /** 2026-10-31: SK's check question for the NEXT turn only; absent clears it. */
+    teachCheck?: { concept: string; question: string };
   },
   now: Date,
 ): SkMemory {
@@ -225,6 +245,10 @@ export function rememberTurn(
   if (turn.langOverride === null) delete next.langOverride;
   else if (turn.langOverride) next.langOverride = turn.langOverride;
   if (turn.langNoted) next.langNoted = turn.langNoted.slice(0, 40);
+  if (turn.taught) next.taught = turn.taught.map((x) => x.slice(0, 80)).slice(0, SK_MEMORY_MAX_TAUGHT);
+  // SK's check question answers only the turn right after it (like `offer`).
+  if (turn.teachCheck?.question.trim()) next.teachCheck = { concept: turn.teachCheck.concept.slice(0, 160), question: turn.teachCheck.question.slice(0, 400) };
+  else delete next.teachCheck;
   return next;
 }
 

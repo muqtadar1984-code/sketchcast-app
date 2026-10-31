@@ -174,13 +174,13 @@ export default function AbsencePanel({
     <div className="card mt-4 p-4 print:hidden">
       <div className="flex flex-wrap items-center gap-2 mb-1">
         <span className="font-medium text-sm">{t.title}</span>
-        <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="field h-9 px-2 text-sm" />
+        <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="field h-11 sm:h-9 px-2 text-base sm:text-sm" />
         <span className="text-[11px] text-[#98A0A9]">{t.hint}</span>
       </div>
 
       {canMark && (
         <div className="flex flex-wrap items-center gap-2 mt-2">
-          <select value={markTeacher} onChange={(e) => setMarkTeacher(e.target.value)} className="field h-9 px-2 text-sm">
+          <select value={markTeacher} onChange={(e) => setMarkTeacher(e.target.value)} className="field h-11 sm:h-9 px-2 text-base sm:text-sm w-full sm:w-auto">
             <option value="">{t.markPlaceholder}</option>
             {teachers
               .filter((x) => !absentIds.has(x.id))
@@ -194,10 +194,10 @@ export default function AbsencePanel({
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             placeholder={t.reasonPlaceholder}
-            className="field h-9 px-3 text-sm w-44"
+            className="field h-11 sm:h-9 px-3 text-base sm:text-sm flex-1 min-w-0 sm:flex-none sm:w-44"
             maxLength={200}
           />
-          <button onClick={() => void mark()} disabled={busy || !markTeacher} className="btn-primary h-9 px-3 text-sm disabled:opacity-50">
+          <button onClick={() => void mark()} disabled={busy || !markTeacher} className="btn-primary h-11 sm:h-9 px-3 text-sm disabled:opacity-50">
             {busy ? t.working : t.mark}
           </button>
         </div>
@@ -216,7 +216,7 @@ export default function AbsencePanel({
                 {a.reason && <span className="text-xs text-[#5B6470]">({a.reason})</span>}
                 <span className="chip bg-[#FDECEA] text-[#B42318]">{t.absent}</span>
                 {canMark && (
-                  <button onClick={() => void unmark(a.id)} disabled={busy} className="text-xs text-[#B42318] hover:underline ms-auto">
+                  <button onClick={() => void unmark(a.id)} disabled={busy} className="min-h-11 sm:min-h-0 text-xs text-[#B42318] hover:underline ms-auto">
                     {t.removeAbsence}
                   </button>
                 )}
@@ -224,7 +224,10 @@ export default function AbsencePanel({
               {mySubs.length === 0 ? (
                 <p className="text-xs text-[#5B6470] mt-1">{t.noLessons}</p>
               ) : (
-                <table className="w-full text-sm border-collapse mt-2">
+                // Scrolls inside the card on a phone: four columns and a picker
+                // do not fit 390 px, and the page itself must never scroll sideways.
+                <div className="overflow-x-auto mt-2">
+                <table className="w-full min-w-[460px] sm:min-w-0 text-sm border-collapse">
                   <thead>
                     <tr className="bg-[#F5F6F3] text-xs text-[#5B6470]">
                       <th className="px-2 py-1.5 text-start font-normal w-20">{t.col.period}</th>
@@ -244,7 +247,7 @@ export default function AbsencePanel({
                             <select
                               value={s.substitute_teacher_id ?? ""}
                               onChange={(e) => void changeSub(s.id, e.target.value || null)}
-                              className={`field h-8 px-2 text-sm ${s.substitute_teacher_id ? "" : "text-[#B42318]"}`}
+                              className={`field h-11 sm:h-8 px-2 text-base sm:text-sm max-w-[12rem] sm:max-w-none ${s.substitute_teacher_id ? "" : "text-[#B42318]"}`}
                               disabled={busy}
                             >
                               <option value="">{`⚠ ${t.noCover}`}</option>
@@ -271,6 +274,7 @@ export default function AbsencePanel({
                     ))}
                   </tbody>
                 </table>
+                </div>
               )}
             </div>
           );

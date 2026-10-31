@@ -21,7 +21,10 @@ import { tabsFor, tabsForHat } from "@/utils/nav-tabs";
 import type { MenuItem } from "./menu-items";
 import { activeHatCookie } from "@/utils/hats-server";
 import { loadBoardBooks, loadBoardKits } from "@/utils/present/ready-made-server";
-import PresentClient, { type BookOption, type ClassName, type KitOption, type PresentSk } from "./present-client";
+import PresentClient, { type BookOption, type ClassName, type KitOption, type LearnerKitOption, type PresentSk } from "./present-client";
+import { learnerGate, loadLearnerKits } from "@/utils/present/learner-server";
+import type { LearnerKit } from "@/utils/present/learner";
+import { fmt } from "@/i18n/format";
 
 export const dynamic = "force-dynamic";
 
@@ -68,7 +71,17 @@ export default async function PresentPage() {
   const t = dict.present;
 
   const verdict = await presentEntitled(admin, user.id, user);
-  if (!verdict.ok) return <Refused t={t} why={verdict.why} />;
+  if (!verdict.ok) {
+    // THE STUDENT BOARD (SK student Board plan 2026-10-31, phase 1). A
+    // student never drives a teacher's Board, but one for whom SK is on
+    // learns her ASSIGNED kits on it, in learner mode: her school's or
+    // teacher's entitlement is what assigned them, so she needs no plan of
+    // her own. Everyone else (a student without SK, a parent) keeps the
+    // refusal exactly as before.
+    const lg = await learnerGate(supabase, user);
+    if (!lg.ok) return <Refused t={t} why={verdict.why} />;
+    return <LearnerBoard supabase={supabase} userId={user.id} role={lg.role} dict={dict} />;
+  }
 
   const { data: profile } = await supabase
     .from("profiles")
@@ -204,6 +217,76 @@ export default async function PresentPage() {
       kits={kits}
       sk={sk}
       tabs={tabs}
+    />
+  );
+}
+
+/**
+ * The student Board: the same client page in learner mode. Her assigned kits
+ * only (utils/present/learner.ts), SK on (the gate above), and none of the
+ * teacher's inputs — no timetable, no classes, no books, no ready-made kits,
+ * no portal menu beyond "Back to my lessons". Best-effort like every read
+ * here: a failed read is an empty list, never a broken page.
+ */
+async function LearnerBoard({
+  supabase,
+  userId,
+  role,
+  dict,
+}: {
+  supabase: Awaited<ReturnType<typeof createClient>>;
+  userId: string;
+  role: string | null;
+  dict: Dictionary;
+}) {
+  const t = dict.present;
+  let kits: LearnerKit[] = [];
+  try {
+    kits = await loadLearnerKits(supabase);
+  } catch {
+    kits = [];
+  }
+  const [{ data: profile }, books] = await Promise.all([
+    supabase.from("profiles").select("full_name").eq("id", userId).maybeSingle(),
+    (async () => {
+      const ids = [...new Set(kits.map((k) => k.bookId).filter((x): x is string => !!x))];
+      if (!ids.length) return [] as { id: string; title: string | null; chapters: { num: number; title?: string | null }[] | null }[];
+      try {
+        const { data } = await supabase.from("books").select("id, title, chapters").in("id", ids);
+        return (data ?? []) as { id: string; title: string | null; chapters: { num: number; title?: string | null }[] | null }[];
+      } catch {
+        return [];
+      }
+    })(),
+  ]);
+  const bookById = new Map(books.map((b) => [b.id, b]));
+  const titleOf = (k: LearnerKit): string => {
+    if (k.title) return k.title;
+    const b = k.bookId ? bookById.get(k.bookId) : undefined;
+    const num = k.chapterNum ?? 0;
+    const ch = b?.chapters?.find((c) => c?.num === num)?.title?.trim();
+    const chapter = ch && !/^\d+$/.test(ch) ? ch : fmt(t.bar.chapterN, { n: num + 1 });
+    return b?.title ? `${b.title} · ${chapter}` : chapter;
+  };
+  // (server component, rendered once per request — Date.now is fine here)
+  // eslint-disable-next-line react-hooks/purity
+  const nowMs = Date.now();
+  const learnerKits: LearnerKitOption[] = kits.map((k) => ({ id: k.id, title: titleOf(k), due: k.due, members: k.members, overdue: !!k.due && Date.parse(k.due) < nowMs }));
+  const sk: PresentSk = { copy: dict.sk.shell, walkCopy: dict.sk.walkthrough, role, hat: null };
+  return (
+    <PresentClient
+      teacherId={userId}
+      teacherName={(profile?.full_name as string | null) ?? null}
+      t={t}
+      shape={shapeFromConfig(null)}
+      slots={[]}
+      classes={[]}
+      lastTaught={[]}
+      books={[]}
+      kits={learnerKits.map((k) => ({ id: k.id, title: k.title }))}
+      sk={sk}
+      tabs={[]}
+      learner={{ kits: learnerKits }}
     />
   );
 }

@@ -36,11 +36,12 @@ export type KitView = {
   pieces: PieceView[];
 };
 
+// min-h-11 below sm: 44px phone tap targets; py-2 alone measured ~36px.
 const BTN_PRIMARY =
-  "inline-flex w-full items-center justify-center rounded-lg bg-[#0C8175] px-3 py-2 text-sm font-medium text-white hover:bg-[#0A6F65] disabled:opacity-60";
+  "inline-flex w-full min-h-11 sm:min-h-0 items-center justify-center rounded-lg bg-[#0C8175] px-3 py-2 text-sm font-medium text-white hover:bg-[#0A6F65] disabled:opacity-60";
 const BTN_ICON =
-  "inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-[#CBD3D1] px-2 py-2 text-xs font-medium text-[#1F2A37] hover:bg-[#F3F6F5] disabled:opacity-60";
-const CHIP = "rounded-full px-3 py-1 text-xs font-medium border transition-colors";
+  "inline-flex flex-1 min-h-11 sm:min-h-0 items-center justify-center gap-1.5 rounded-lg border border-[#CBD3D1] px-2 py-2 text-xs font-medium text-[#1F2A37] hover:bg-[#F3F6F5] disabled:opacity-60";
+const CHIP = "inline-flex min-h-11 sm:min-h-0 items-center rounded-full px-3 py-1 text-xs font-medium border transition-colors";
 const CHIP_ON = `${CHIP} bg-[#0C8175] border-[#0C8175] text-white`;
 const CHIP_OFF = `${CHIP} bg-white border-[#CBD3D1] text-[#1F2A37] hover:bg-[#F3F6F5]`;
 
@@ -186,7 +187,7 @@ export default function KitsGallery({
           }}
           placeholder={t.find}
           aria-label={t.find}
-          className="ml-auto w-full sm:w-56 rounded-lg border border-[#CBD3D1] px-3 py-1.5 text-sm"
+          className="ml-auto w-full sm:w-56 h-11 sm:h-auto rounded-lg border border-[#CBD3D1] px-3 py-1.5 text-base sm:text-sm"
         />
       </div>
 
@@ -212,7 +213,7 @@ export default function KitsGallery({
           <button
             type="button"
             onClick={() => setCount(nextCount)}
-            className="rounded-lg border border-[#CBD3D1] bg-white px-4 py-2 text-sm font-medium text-[#1F2A37] hover:bg-[#F3F6F5]"
+            className="min-h-11 sm:min-h-0 rounded-lg border border-[#CBD3D1] bg-white px-4 py-2 text-sm font-medium text-[#1F2A37] hover:bg-[#F3F6F5]"
           >
             {fmt(t.showMore, { n: Math.min(KIT_CHUNK, matched - shown.length) })}
           </button>
@@ -375,13 +376,13 @@ const KitCard = memo(function KitCard({
         // seeks against it. Nothing signed is rendered into the page. A kit
         // with no stored MP4 (the route answers 404) falls back to its YouTube
         // video, captions off by default (youtubeEmbedUrl).
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4" role="dialog" aria-modal="true" aria-label={kit.title} onClick={() => setPlaying(false)}>
+        <div className="fixed inset-x-0 top-0 h-[100dvh] z-50 flex items-center justify-center bg-black/85 p-4" role="dialog" aria-modal="true" aria-label={kit.title} onClick={() => setPlaying(false)}>
           <div className="w-full max-w-4xl" onClick={(e) => e.stopPropagation()}>
             <div className="mb-2 flex items-center justify-between gap-3 text-white">
-              <span className="truncate text-sm font-medium" lang={kit.language}>
+              <span className="min-w-0 truncate text-sm font-medium" lang={kit.language}>
                 {kit.title}
               </span>
-              <button type="button" onClick={() => setPlaying(false)} className="rounded-md px-2 py-1 text-sm hover:bg-white/10">
+              <button type="button" onClick={() => setPlaying(false)} className="shrink-0 min-h-11 sm:min-h-0 rounded-md px-3 sm:px-2 py-1 text-sm hover:bg-white/10">
                 {t.close}
               </button>
             </div>
@@ -467,13 +468,13 @@ const KitCard = memo(function KitCard({
             {pieces
               .filter((p) => p.downloads.length > 0)
               .map((p) => (
-                <li key={p.generationId} className="flex items-center justify-between gap-2">
-                  <span className="text-[#1F2A37] flex items-center gap-1.5">
+                <li key={p.generationId} className="flex flex-wrap items-center justify-between gap-x-2">
+                  <span className="min-w-0 text-[#1F2A37] flex items-center gap-1.5">
                     <PieceIcon kind={p.kind} /> {p.label}
                   </span>
-                  <span className="flex gap-3 shrink-0">
+                  <span className="flex flex-wrap gap-x-3 shrink-0">
                     {p.downloads.map((d) => (
-                      <a key={d.href} href={d.href} className="text-xs font-medium text-[#0C8175] hover:underline">
+                      <a key={d.href} href={d.href} className="inline-flex items-center min-h-11 sm:min-h-0 text-xs font-medium text-[#0C8175] hover:underline">
                         ⬇ {d.label}
                       </a>
                     ))}

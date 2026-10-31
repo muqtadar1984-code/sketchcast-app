@@ -100,12 +100,12 @@ export function GeneratePaperButton({
   }
 
   return (
-    <span className="inline-flex items-center gap-2">
-      {error && <span className="text-xs text-red-600">{error}</span>}
+    <span className="inline-flex flex-wrap items-center gap-2">
+      {error && <span className="text-xs text-red-600 [overflow-wrap:anywhere]">{error}</span>}
       <button
         onClick={() => void generate()}
         disabled={busy}
-        className="btn-primary h-8 px-3 text-xs"
+        className="btn-primary h-11 sm:h-8 px-3 text-xs"
         title={
           hasLesson
             ? "Free — the paper reuses this chapter's lesson analysis"
@@ -181,23 +181,23 @@ export function AssignChildButton({
 
   if (childrenList.length === 0) return null;
   return (
-    <span className="inline-flex items-center gap-2">
+    <span className="inline-flex flex-wrap items-center gap-2">
       {open ? (
         <>
-          <select value={childId} onChange={(e) => setChildId(e.target.value)} className="field h-8 px-2 text-xs">
+          <select value={childId} onChange={(e) => setChildId(e.target.value)} className="field h-11 sm:h-8 px-2 text-base sm:text-xs">
             {childrenList.map((c) => (
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
           </select>
-          <input type="date" value={due} onChange={(e) => setDue(e.target.value)} className="field h-8 px-2 text-xs" />
-          <button onClick={assign} disabled={busy || !childId} className="btn-primary h-8 px-3 text-xs">
+          <input type="date" value={due} onChange={(e) => setDue(e.target.value)} className="field h-11 sm:h-8 px-2 text-base sm:text-xs" />
+          <button onClick={assign} disabled={busy || !childId} className="btn-primary h-11 sm:h-8 px-3 text-xs">
             {done ? "Assigned ✓" : busy ? "…" : "Assign"}
           </button>
-          <button onClick={() => setOpen(false)} className="btn-ghost h-8 px-2 text-xs">✕</button>
-          {error && <span className="text-xs text-red-600">{error}</span>}
+          <button onClick={() => setOpen(false)} className="btn-ghost h-11 w-11 sm:h-8 sm:w-auto px-2 text-xs">✕</button>
+          {error && <span className="text-xs text-red-600 [overflow-wrap:anywhere]">{error}</span>}
         </>
       ) : (
-        <button onClick={() => setOpen(true)} className="btn-ghost h-8 px-3 text-xs">
+        <button onClick={() => setOpen(true)} className="btn-ghost h-11 sm:h-8 px-3 text-xs">
           Assign to child
         </button>
       )}

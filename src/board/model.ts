@@ -92,6 +92,8 @@ export type TextCard = {
   /** 0-based position in its set, and the set's size. */
   index?: number;
   total?: number;
+  /** The question's type (student Board practice, 2026-10-31): which answer box she gets. */
+  qtype?: "fill_blank" | "short" | "true_false" | "match" | "mcq" | "subjective";
 };
 
 export type Page = {

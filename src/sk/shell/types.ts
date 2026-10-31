@@ -409,6 +409,28 @@ export type SkTurnRequest = {
    *  `walkthrough` action and no model call; any other turn tells the model
    *  the tour is there, so SK never says there is none. */
   walk?: SkTurnWalk;
+  /** 2026-10-31 (student Board phase 3): a TEACHING turn SK starts by itself —
+   *  a gap on the worksheet (`sk:learner-gap`), or the Extra step after the
+   *  kit. Untrusted like the collector (learn-teach.ts parseTeachRequest);
+   *  only a student on her own Board is taught from it. */
+  teach?: SkTeachRequest;
+};
+
+/** What starts a teaching turn (learn-teach.ts): a worksheet gap, her
+ *  confusion in conversation (decided on the server), the Extra step. */
+export type SkTeachTrigger = "gap" | "confusion" | "extra";
+
+/** A teaching turn's request. The gap fields are phase 2's `sk:learner-gap`
+ *  detail as the Board dispatched it. */
+export type SkTeachRequest = {
+  trigger: SkTeachTrigger;
+  generationId?: string;
+  questionId?: string;
+  questionText?: string;
+  concept?: string;
+  attempts?: number;
+  lastAnswer?: string;
+  reason?: "wrong_twice" | "asked_help";
 };
 
 /** Where the walkthrough is (sanitised server-side; display only, never trusted for access). */
@@ -444,6 +466,11 @@ export type SkTurnEvent =
    *  writes the seen row. With `action` (2026-10-30): a tour command for the
    *  tour already running in her tab ("…continue with the tour"), no model. */
   | { type: "walkthrough"; action?: SkWalkAction }
+  /** 2026-10-31 (student Board phase 3): a picture for the lesson SK is
+   *  teaching in the chat — a slide of the open kit's OWN deck (never a new
+   *  image). The panel shows that page through /api/present/deck-pages,
+   *  which re-checks the deck is hers. */
+  | { type: "picture"; generationId: string; n: number; title: string }
   | {
       type: "done";
       /** §2.3 / §9.3: which tools the answer rests on, and its label. */
@@ -460,6 +487,10 @@ export type SkTurnEvent =
        *  from, for the panel's citation chips. `sources` stays the TOOL names
        *  (§2.3); these are the documents behind them. */
       citations?: SkCitation[];
+      /** 2026-10-31 (student Board phase 3): this reply is a TEACHING turn
+       *  (a short lesson, or SK's reply to her check answer) — the panel opens
+       *  the conversation so the lesson reads in full. `extra` = beyond the kit. */
+      teach?: { trigger: SkTeachTrigger | "check"; extra: boolean };
     }
   | { type: "error"; message: string };
 

@@ -236,8 +236,8 @@ export default async function SchoolAdminPage() {
   return (
     <div className="min-h-screen bg-[#FCFCFA] text-[#14181F]">
       <AppHeader />
-      <main className="max-w-7xl mx-auto px-6 py-10">
-        <h1 className="text-4xl mb-2">{t.title}</h1>
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
+        <h1 className="text-3xl sm:text-4xl mb-2">{t.title}</h1>
         <InkUnderline className="block h-3 w-28 mb-3" />
         <p className="text-[#5B6470] mb-7">{t.subtitle}</p>
 
@@ -281,7 +281,7 @@ export default async function SchoolAdminPage() {
                         : fmt(t.notices.ackNoParents, { n: acked });
                   const pinned = pinnedIds.has(n.id);
                   return (
-                    <div key={n.id} className="px-5 py-3 flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
+                    <div key={n.id} className="px-4 sm:px-5 py-3 flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
                       <div className="min-w-0 flex-1">
                         <div className="text-sm text-[#14181F] truncate">{n.title}</div>
                         <div className="text-xs text-[#5B6470]">
@@ -294,7 +294,7 @@ export default async function SchoolAdminPage() {
                         </div>
                         <div className="text-xs text-[#98A0A9] tabular">{progress}</div>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2 [&_button]:min-h-11 sm:[&_button]:min-h-0">
                         {n.importance === "important" && (
                           <span className="chip bg-[#FCEBEA] text-[#B42318]">{t.notices.important}</span>
                         )}
@@ -339,12 +339,14 @@ export default async function SchoolAdminPage() {
         ) : (
           <div className="card divide-y divide-[#EEF0EC]">
             {members.map((m) => (
-              <div key={m.id} className="px-5 py-2.5 flex items-center justify-between gap-3 text-sm">
-                <span className="min-w-0 truncate">
+              <div key={m.id} className="px-4 sm:px-5 py-2.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-3 text-sm">
+                <span className="min-w-0 sm:truncate">
                   <span className="font-medium">{m.name}</span>
                   <span className="text-[#5B6470]"> · {t.role[m.role] ?? m.role}</span>
                 </span>
-                <ResetPasswordButton targetId={m.id} name={m.name} />
+                <span className="[&_button]:min-h-11 sm:[&_button]:min-h-0">
+                  <ResetPasswordButton targetId={m.id} name={m.name} />
+                </span>
               </div>
             ))}
           </div>
@@ -357,15 +359,15 @@ export default async function SchoolAdminPage() {
         ) : (
           <div className="card divide-y divide-[#EEF0EC]">
             {students.map((s) => (
-              <div key={s.id} className="px-5 py-2.5 flex items-center justify-between gap-3 text-sm">
-                <span className="min-w-0 truncate">
+              <div key={s.id} className="px-4 sm:px-5 py-2.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-3 text-sm">
+                <span className="min-w-0 sm:truncate">
                   <span className="font-medium">{s.name}</span>
                   {s.username && <span className="text-[#5B6470]"> · {s.username}</span>}
                   {(classesOf.get(s.id) ?? []).length > 0 && (
                     <span className="text-[#5B6470]"> · {classesOf.get(s.id)!.join(", ")}</span>
                   )}
                 </span>
-                <span className="flex items-center gap-3 shrink-0">
+                <span className="flex flex-wrap items-center gap-x-4 gap-y-1 sm:shrink-0 [&_button]:min-h-11 sm:[&_button]:min-h-0">
                   <ResetPasswordButton targetId={s.id} name={s.name} />
                   <DeleteStudentButton targetId={s.id} name={s.name} />
                 </span>
@@ -381,12 +383,12 @@ export default async function SchoolAdminPage() {
         ) : (
           <div className="card divide-y divide-[#EEF0EC]">
             {log.map((l) => (
-              <div key={l.id} className="px-5 py-2.5 flex items-center justify-between gap-3 text-sm">
-                <span className="min-w-0 truncate">
+              <div key={l.id} className="px-4 sm:px-5 py-2.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-3 text-sm">
+                <span className="min-w-0 sm:truncate">
                   <span className="font-medium">{nameOf.get(l.actor_id) || dict.school.fallback.user}</span>
                   <span className="text-[#5B6470]"> · {l.actor_role}</span>
                 </span>
-                <span className="flex items-center gap-3 shrink-0 text-xs text-[#5B6470]">
+                <span className="flex flex-wrap items-center gap-x-3 gap-y-1 sm:shrink-0 text-xs text-[#5B6470]">
                   <span className="chip bg-[#EEF0EC] text-[#5B6470] normal-case tracking-normal">{l.scope}</span>
                   {l.detail?.at_risk != null && (
                     <span className="tabular">{fmt(t.audit.atRisk, { n: l.detail.at_risk })}</span>

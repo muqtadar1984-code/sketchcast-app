@@ -4,6 +4,7 @@
  * `say` lines, and the registry meta (teacher hat, Board flag, immediate).
  * Run: node node_modules/vitest/vitest.mjs run src/sk/capabilities/__tests__/board.test.ts
  */
+import { STUDENT_BOARD_MOVES } from "@/sk/shell/learner";
 import { describe, expect, it } from "vitest";
 import type { SkBoardState, SkCapability, SkContext } from "@/sk/shell/types";
 import { BOARD_CAPABILITIES, BOARD_MOVES, BOARD_NOT_OPEN, BOARD_NO_MAP, conceptTokens, resolveSegment, sayFor } from "../board";
@@ -57,14 +58,15 @@ const deps = { session: fakeSession({}), now: NOW };
 const run = (name: string, args: Record<string, unknown> = {}, board: SkBoardState | null = BOARD, locale = "en") => cap(name).handler(ctxWith(board, locale), args, deps);
 
 describe("registry meta", () => {
-  it("one entry per move, immediate/board, teacher hat, Board flag, no student/parent", () => {
+  it("one entry per move, immediate/board, teacher hat, Board flag, no parent; a student only for her own Board's moves", () => {
     expect(BOARD_CAPABILITIES.map((c) => c.meta.name)).toEqual(BOARD_MOVES.map((m) => `board.${m}`));
     for (const c of BOARD_CAPABILITIES) {
       expect(c.meta.tier).toBe("immediate");
       expect(c.meta.kind).toBe("board");
       expect(c.meta.flags).toEqual(["board"]);
       expect(c.meta.hats).toEqual(["teacher"]);
-      expect(c.meta.roles).not.toContain("student");
+      // The student Board (learner mode, 2026-10-31): shell/learner.ts.
+      expect(c.meta.roles.includes("student")).toBe(STUDENT_BOARD_MOVES.has(c.meta.name.slice("board.".length) as never));
       expect(c.meta.roles).not.toContain("parent");
       expect(c.meta.roles).toContain("teacher");
     }

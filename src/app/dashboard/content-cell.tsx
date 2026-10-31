@@ -220,7 +220,7 @@ export default function ContentCell({
     // has actually failed — the per-artifact reporter was removed from every
     // artifact for being noisy, and this brings it back just where it earns place.
     return (
-      <span className="inline-flex items-center gap-1.5 text-[13px] whitespace-nowrap">
+      <span className="inline-flex flex-wrap sm:flex-nowrap items-center gap-1.5 text-[13px] sm:whitespace-nowrap">
         <span className="text-[#B42318]">{fmt(t.cell.failed, { label: isPres ? t.watch : label })}</span>
         {!genLocked && genControl(t.cell.retry)}
         <ReportFailure
@@ -249,9 +249,9 @@ export default function ContentCell({
   // `videos`. Empty for every other account, so nothing extra renders.
   const videoDownloads = lesson.videoDownloads ?? [];
   const nParts = Math.max(videos.length, decks.length);
-  const linkCls = "inline-flex items-center gap-1 font-medium text-[#0C8175] hover:underline";
+  const linkCls = "inline-flex items-center gap-1 font-medium text-[#0C8175] hover:underline pointer-coarse:min-h-11";
   return (
-    <span className={`group inline-flex ${isPres && nParts > 1 ? "items-start" : "items-center"} gap-1.5 text-[13px] whitespace-nowrap`}>
+    <span className={`group inline-flex ${isPres && nParts > 1 ? "items-start" : "items-center"} gap-1.5 text-[13px] flex-wrap sm:flex-nowrap sm:whitespace-nowrap`}>
       {isPres ? (
         nParts > 1 ? (
           <span className="inline-flex flex-col gap-1">

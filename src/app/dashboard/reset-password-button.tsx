@@ -41,7 +41,7 @@ export default function ResetPasswordButton({ targetId, name }: { targetId: stri
             navigator.clipboard?.writeText(temp);
             setCopied(true);
           }}
-          className="font-medium text-[#0C8175] hover:underline"
+          className="inline-flex items-center min-h-11 sm:min-h-0 font-medium text-[#0C8175] hover:underline"
         >
           {copied ? "Copied" : "Copy"}
         </button>
@@ -52,17 +52,19 @@ export default function ResetPasswordButton({ targetId, name }: { targetId: stri
 
   return (
     <span className="inline-flex flex-wrap items-center gap-2 text-xs">
-      {/* [overflow-wrap:anywhere]: a long unbroken server error (e.g. a raw
+      {/* The buttons are min-h-11 below sm: a bare text-xs link is a ~16px
+          tap target, and on a phone this sits next to Delete.
+          [overflow-wrap:anywhere]: a long unbroken server error (e.g. a raw
           password-policy charset) must wrap, not stretch the page wider than
           the phone viewport (Khaja's zoomed-out screenshot). */}
       {error && <span className="text-red-600 min-w-0 [overflow-wrap:anywhere]">{error}</span>}
       {stage === "confirm" ? (
         <>
           <span className="text-[#5B6470]">Reset {name}&apos;s password?</span>
-          <button onClick={doReset} className="font-medium text-red-600 hover:underline">
+          <button onClick={doReset} className="inline-flex items-center min-h-11 sm:min-h-0 font-medium text-red-600 hover:underline">
             Yes, reset
           </button>
-          <button onClick={() => setStage("idle")} className="font-medium text-[#5B6470] hover:underline">
+          <button onClick={() => setStage("idle")} className="inline-flex items-center min-h-11 sm:min-h-0 font-medium text-[#5B6470] hover:underline">
             Cancel
           </button>
         </>
@@ -73,7 +75,7 @@ export default function ResetPasswordButton({ targetId, name }: { targetId: stri
             setStage("confirm");
           }}
           disabled={stage === "busy"}
-          className="font-medium text-[#0C8175] hover:underline disabled:opacity-60"
+          className="inline-flex items-center min-h-11 sm:min-h-0 font-medium text-[#0C8175] hover:underline disabled:opacity-60"
         >
           {stage === "busy" ? "Resetting…" : "Reset password"}
         </button>

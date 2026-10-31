@@ -67,8 +67,8 @@ export default function CoordinatorAdmin({
   const grantable = members.filter((m) => !coordinatorIds.has(m.id));
 
   return (
-    <div data-tour="school-admin-roles" className="card p-5">
-      <div className="flex items-center justify-between mb-1">
+    <div data-tour="school-admin-roles" className="card p-4 sm:p-5">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 mb-1">
         <h2 className="font-display font-medium text-lg">{t.title}</h2>
         <span className="text-xs text-[#5B6470]">
           {coordinators.length === 1 ? t.countOne : fmt(t.countMany, { n: coordinators.length })}
@@ -88,14 +88,14 @@ export default function CoordinatorAdmin({
             const f = form[m.id] ?? { grade: grades[0] ?? "", subject: "" };
             return (
               <div key={m.id} className="border border-[#EEF0EC] rounded-lg p-3">
-                <div className="flex items-center justify-between gap-3 mb-2">
+                <div className="flex items-start sm:items-center justify-between gap-3 mb-2">
                   <span className="font-medium">
                     {m.name} <span className="chip font-sans bg-[#E2F4F1] text-[#0C8175] ms-1">{t.teacherAndCoordinator}</span>
                   </span>
                   <button
                     onClick={() => call({ action: "revoke_coordinator", userId: m.id })}
                     disabled={busy}
-                    className="text-xs font-medium text-[#5B6470] hover:text-red-600"
+                    className="inline-flex items-center min-h-11 sm:min-h-0 px-2 -me-2 -my-2 sm:m-0 sm:p-0 shrink-0 text-xs font-medium text-[#5B6470] hover:text-red-600"
                   >
                     {t.remove}
                   </button>
@@ -113,7 +113,7 @@ export default function CoordinatorAdmin({
                           onClick={() => call({ action: "remove_scope", scopeId: s.id })}
                           disabled={busy}
                           aria-label={t.removeScope}
-                          className="ms-0.5 text-[#9A6400] hover:text-red-600"
+                          className="inline-flex items-center justify-center size-8 -my-2 -me-2.5 sm:size-auto sm:m-0 sm:ms-0.5 text-base sm:text-xs text-[#9A6400] hover:text-red-600"
                         >
                           ×
                         </button>
@@ -127,7 +127,7 @@ export default function CoordinatorAdmin({
                     <select
                       value={f.grade}
                       onChange={(e) => setForm((s) => ({ ...s, [m.id]: { ...f, grade: e.target.value } }))}
-                      className="field h-8 px-2 text-sm"
+                      className="field h-11 sm:h-8 px-2 text-base sm:text-sm flex-1 min-w-[8rem] sm:flex-none sm:min-w-0"
                     >
                       {grades.map((g) => (
                         <option key={g} value={g}>{fmt(t.grade, { grade: g })}</option>
@@ -136,7 +136,7 @@ export default function CoordinatorAdmin({
                     <select
                       value={f.subject}
                       onChange={(e) => setForm((s) => ({ ...s, [m.id]: { ...f, subject: e.target.value } }))}
-                      className="field h-8 px-2 text-sm"
+                      className="field h-11 sm:h-8 px-2 text-base sm:text-sm flex-1 min-w-[8rem] sm:flex-none sm:min-w-0"
                     >
                       <option value="">{t.allSubjects}</option>
                       {subjects.map((sub) => (
@@ -146,7 +146,7 @@ export default function CoordinatorAdmin({
                     <button
                       onClick={() => call({ action: "add_scope", userId: m.id, grade: f.grade || grades[0], subject: f.subject })}
                       disabled={busy || !(f.grade || grades[0])}
-                      className="btn-ghost h-8 px-3 text-xs"
+                      className="btn-ghost h-11 sm:h-8 px-3 text-sm sm:text-xs w-full sm:w-auto"
                     >
                       {t.addScope}
                     </button>
@@ -169,7 +169,7 @@ export default function CoordinatorAdmin({
           <select
             value={grant.userId}
             onChange={(e) => setGrant((s) => ({ ...s, userId: e.target.value }))}
-            className="field h-8 px-2 text-sm"
+            className="field h-11 sm:h-8 px-2 text-base sm:text-sm flex-1 min-w-[8rem] sm:flex-none sm:min-w-0"
           >
             <option value="">{t.chooseTeacher}</option>
             {grantable.map((m) => (
@@ -179,7 +179,7 @@ export default function CoordinatorAdmin({
           <select
             value={grant.grade}
             onChange={(e) => setGrant((s) => ({ ...s, grade: e.target.value }))}
-            className="field h-8 px-2 text-sm"
+            className="field h-11 sm:h-8 px-2 text-base sm:text-sm flex-1 min-w-[8rem] sm:flex-none sm:min-w-0"
           >
             {grades.map((g) => (
               <option key={g} value={g}>{fmt(t.grade, { grade: g })}</option>
@@ -188,7 +188,7 @@ export default function CoordinatorAdmin({
           <select
             value={grant.subject}
             onChange={(e) => setGrant((s) => ({ ...s, subject: e.target.value }))}
-            className="field h-8 px-2 text-sm"
+            className="field h-11 sm:h-8 px-2 text-base sm:text-sm flex-1 min-w-[8rem] sm:flex-none sm:min-w-0"
           >
             <option value="">{t.allSubjects}</option>
             {subjects.map((sub) => (
@@ -200,7 +200,7 @@ export default function CoordinatorAdmin({
               call({ action: "add_scope", userId: grant.userId, grade: grant.grade || grades[0], subject: grant.subject })
             }
             disabled={busy || !grant.userId || !(grant.grade || grades[0])}
-            className="btn-ghost h-8 px-3 text-xs"
+            className="btn-ghost h-11 sm:h-8 px-3 text-sm sm:text-xs w-full sm:w-auto"
           >
             {t.grant}
           </button>

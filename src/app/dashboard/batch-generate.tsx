@@ -183,7 +183,7 @@ export default function BatchGenerate({
           </p>
 
           {/* Chapters */}
-          <label className="flex items-center gap-1.5 text-xs cursor-pointer py-1 text-[#5B6470]">
+          <label className="flex items-center gap-1.5 pointer-coarse:min-h-11 text-xs cursor-pointer py-1 text-[#5B6470]">
             <input
               type="checkbox"
               checked={allChapters}
@@ -194,7 +194,7 @@ export default function BatchGenerate({
           </label>
           <div className="max-h-44 overflow-y-auto divide-y divide-[#F1F3EF] mb-2">
             {chapters.map((c) => (
-              <label key={c.num} className="flex items-center gap-1.5 text-xs py-1.5 cursor-pointer">
+              <label key={c.num} className="flex items-center gap-1.5 pointer-coarse:min-h-11 text-xs py-1.5 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={chapterSel.has(c.num)}
@@ -212,7 +212,7 @@ export default function BatchGenerate({
           <div className="flex items-center gap-4 text-xs mb-2">
             <span className="text-[#98A0A9] uppercase tracking-wide text-[10px]">{t.revision.papers}</span>
             {KINDS.map((k) => (
-              <label key={k} className="flex items-center gap-1.5 cursor-pointer">
+              <label key={k} className="flex items-center gap-1.5 pointer-coarse:min-h-11 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={kindSel.has(k)}

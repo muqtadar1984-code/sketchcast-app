@@ -185,9 +185,9 @@ export default function ReportIssueForm({
   const label = variant === "student" ? t.labelStudent : t.label;
 
   return (
-    <div className="fixed bottom-4 start-4 z-40">
+    <div data-corner className="fixed bottom-4 start-4 z-40">
       {open && (
-        <form onSubmit={submit} className="card p-4 mb-2 w-80 shadow-lg">
+        <form onSubmit={submit} className="card p-4 mb-2 w-80 max-w-[calc(100vw-2rem)] max-h-[calc(100dvh-6rem)] overflow-y-auto shadow-lg">
           <p className="font-medium text-sm mb-2">{variant === "student" ? t.titleStudent : t.label}</p>
           <label className="block mb-2">
             <span className="text-xs text-[#5B6470]">{t.about}</span>
@@ -276,7 +276,7 @@ export default function ReportIssueForm({
       <button
         data-tour="report-issue"
         onClick={() => setOpen((o) => !o)}
-        className="group flex items-center h-10 rounded-full bg-white border border-[#E6E8E4] shadow-sm px-2.5 hover:px-3.5 focus-visible:px-3.5 transition-all"
+        className="group flex items-center h-11 sm:h-10 rounded-full bg-white border border-[#E6E8E4] shadow-sm px-2.5 hover:px-3.5 focus-visible:px-3.5 transition-all"
         title={label}
         aria-label={label}
       >

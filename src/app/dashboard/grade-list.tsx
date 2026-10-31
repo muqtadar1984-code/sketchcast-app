@@ -152,7 +152,7 @@ export default function GradeList({
                   )}
                 </>
               )}
-              <span className="flex items-center gap-2 ms-auto">
+              <span className="flex flex-wrap items-center gap-2 ms-auto">
                 <input
                   type="number"
                   placeholder={auto ? "New score" : "Score"}
@@ -178,7 +178,7 @@ export default function GradeList({
                   placeholder="Feedback (optional)"
                   value={feedback[r.id] ?? ""}
                   onChange={(e) => setFeedback((s) => ({ ...s, [r.id]: e.target.value }))}
-                  className="field h-8 w-44 px-2 text-sm"
+                  className="field h-8 w-full sm:w-44 px-2 text-sm"
                 />
                 <button onClick={() => save(r)} disabled={busy === r.id} className="btn-primary h-8 px-3 text-xs">
                   {busy === r.id ? "Saving…" : auto ? "Override" : "Save"}

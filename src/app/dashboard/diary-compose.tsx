@@ -87,7 +87,7 @@ export default function DiaryCompose({
             key={nt}
             type="button"
             onClick={() => setType(nt)}
-            className={`chip font-sans normal-case tracking-normal ${
+            className={`chip font-sans normal-case tracking-normal pointer-coarse:min-h-11 pointer-coarse:px-3 ${
               type === nt ? TYPE_STYLE[nt] : "bg-white border border-[#E6E8E4] text-[#5B6470] hover:bg-[#F5F6F3]"
             }`}
           >

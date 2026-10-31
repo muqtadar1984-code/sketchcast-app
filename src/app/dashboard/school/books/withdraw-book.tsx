@@ -86,7 +86,7 @@ export default function WithdrawBook({
 
   return (
     <>
-      <button onClick={openDialog} className="btn-ghost h-8 px-2.5 text-xs whitespace-nowrap">
+      <button onClick={openDialog} className="btn-ghost h-11 sm:h-8 px-3 sm:px-2.5 text-sm sm:text-xs whitespace-nowrap">
         {t.action}
       </button>
 
@@ -97,7 +97,7 @@ export default function WithdrawBook({
             role="dialog"
             aria-modal="true"
             aria-label={fmt(t.title, { book: title })}
-            className="relative card w-full max-w-lg p-6 space-y-4"
+            className="relative card w-full max-w-lg p-5 sm:p-6 space-y-4 max-h-[90dvh] overflow-y-auto"
           >
             <h2 className="text-xl">{fmt(t.title, { book: title })}</h2>
 
@@ -132,7 +132,7 @@ export default function WithdrawBook({
                 <label className="block text-sm">
                   <span className="text-[#5B6470]">{fmt(t.typeToConfirm, { book: title })}</span>
                   <input
-                    className="field mt-1.5 w-full"
+                    className="field mt-1.5 w-full max-sm:h-11 max-sm:px-3 max-sm:text-base"
                     value={typed}
                     onChange={(e) => setTyped(e.target.value)}
                     autoComplete="off"
@@ -144,14 +144,14 @@ export default function WithdrawBook({
 
             {error && <p className="text-sm text-[#B42318]">{error}</p>}
 
-            <div className="flex justify-end gap-2 pt-1">
-              <button onClick={() => setOpen(false)} disabled={busy} className="btn-ghost h-9 px-3 text-sm">
+            <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-1">
+              <button onClick={() => setOpen(false)} disabled={busy} className="btn-ghost h-11 sm:h-9 px-3 text-sm">
                 {t.cancel}
               </button>
               <button
                 onClick={confirm}
                 disabled={!confirmed || busy}
-                className="btn-primary h-9 px-3 text-sm disabled:opacity-40"
+                className="btn-primary h-11 sm:h-9 px-3 text-sm disabled:opacity-40"
               >
                 {busy ? t.removing : t.confirm}
               </button>

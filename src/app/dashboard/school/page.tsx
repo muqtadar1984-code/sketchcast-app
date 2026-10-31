@@ -277,8 +277,8 @@ export default async function SchoolAnalyticsPage() {
   return (
     <div className="min-h-screen bg-[#FCFCFA] text-[#14181F]">
       <AppHeader />
-      <main className="max-w-7xl mx-auto px-6 py-10">
-        <h1 className="text-4xl mb-2">{t.title}</h1>
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
+        <h1 className="text-3xl sm:text-4xl mb-2">{t.title}</h1>
         <InkUnderline className="block h-3 w-28 mb-3" />
         <p className="text-[#5B6470] mb-7">
           <span data-tour="school-scope" className="chip bg-[#E2F4F1] text-[#0C8175] me-2">{scopeLabel}</span>
@@ -307,7 +307,7 @@ export default async function SchoolAnalyticsPage() {
           // Coordinator: the named, actionable worklist within their slice.
           <div data-tour="school-worklist" className="card divide-y divide-[#EEF0EC]">
             {flagged.map((f) => (
-              <div key={f.studentId} className="px-5 py-3 flex items-start justify-between gap-4">
+              <div key={f.studentId} className="px-4 sm:px-5 py-3 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-4">
                 <div className="min-w-0">
                   <div className="font-medium">
                     {f.name} <span className="text-[#5B6470] font-normal text-sm">· {f.className}</span>
@@ -323,7 +323,7 @@ export default async function SchoolAnalyticsPage() {
                 {f.parentEmail && (
                   <a
                     href={`mailto:${f.parentEmail}?subject=${encodeURIComponent(fmt(t.worklist.contactSubject, { name: f.name }))}`}
-                    className="btn-ghost h-9 px-3 text-sm whitespace-nowrap shrink-0"
+                    className="btn-ghost inline-flex items-center justify-center h-11 sm:h-9 px-3 text-sm whitespace-nowrap shrink-0 self-start"
                   >
                     {t.worklist.contactParent}
                   </a>
@@ -338,7 +338,7 @@ export default async function SchoolAnalyticsPage() {
             {[...byGrade.entries()]
               .sort((a, b) => b[1] - a[1])
               .map(([grade, n]) => (
-                <div key={grade} className="px-5 py-3 flex items-center justify-between">
+                <div key={grade} className="px-4 sm:px-5 py-3 flex items-center justify-between gap-3">
                   <span className="font-medium">{fmt(t.byGrade.grade, { grade })}</span>
                   <span className="tabular text-[#9A6400]">{fmt(t.byGrade.atRisk, { n })}</span>
                 </div>

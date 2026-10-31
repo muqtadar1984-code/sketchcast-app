@@ -133,14 +133,14 @@ export default function NoticeComposerForm({ t }: { t: NoticeComposerMessages })
   }
 
   return (
-    <div data-tour="notice-composer" className="card p-5 mb-6">
-      <div className="flex items-start justify-between gap-3">
+    <div data-tour="notice-composer" className="card p-4 sm:p-5 mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
         <div>
           <h2 className="font-display font-medium">{t.title}</h2>
           <p className="text-sm text-[#5B6470] mt-0.5">{t.subtitle}</p>
         </div>
         {!open && (
-          <button onClick={() => setOpen(true)} className="btn-primary h-9 px-4 text-sm shrink-0">
+          <button onClick={() => setOpen(true)} className="btn-primary h-11 sm:h-9 px-4 text-sm shrink-0">
             {t.write}
           </button>
         )}
@@ -156,7 +156,7 @@ export default function NoticeComposerForm({ t }: { t: NoticeComposerMessages })
                   key={a}
                   type="button"
                   onClick={() => setAudience(a)}
-                  className={`chip font-sans normal-case tracking-normal ${
+                  className={`chip font-sans normal-case tracking-normal max-sm:min-h-10 max-sm:px-3.5 max-sm:text-sm ${
                     audience === a
                       ? "bg-[#E2F4F1] text-[#0C8175]"
                       : "bg-white border border-[#E6E8E4] text-[#5B6470] hover:bg-[#F5F6F3]"
@@ -174,7 +174,7 @@ export default function NoticeComposerForm({ t }: { t: NoticeComposerMessages })
             onChange={(e) => setTitle(e.target.value)}
             placeholder={t.titlePlaceholder}
             maxLength={120}
-            className="field w-full h-10 px-3 text-sm"
+            className="field w-full h-11 sm:h-10 px-3 text-base sm:text-sm"
           />
           <textarea
             value={body}
@@ -182,7 +182,7 @@ export default function NoticeComposerForm({ t }: { t: NoticeComposerMessages })
             rows={3}
             maxLength={4000}
             placeholder={t.bodyPlaceholder}
-            className="field w-full px-3 py-2 text-sm"
+            className="field w-full px-3 py-2 text-base sm:text-sm"
           />
 
           {/* ── The link (https only — the server refuses anything else) ──── */}
@@ -193,14 +193,14 @@ export default function NoticeComposerForm({ t }: { t: NoticeComposerMessages })
               placeholder={t.linkPlaceholder}
               maxLength={500}
               inputMode="url"
-              className="field w-full h-10 px-3 text-sm"
+              className="field w-full h-11 sm:h-10 px-3 text-base sm:text-sm"
             />
             <input
               value={linkLabel}
               onChange={(e) => setLinkLabel(e.target.value)}
               placeholder={t.linkLabelPlaceholder}
               maxLength={60}
-              className="field w-full h-10 px-3 text-sm"
+              className="field w-full h-11 sm:h-10 px-3 text-base sm:text-sm"
             />
           </div>
 
@@ -212,7 +212,7 @@ export default function NoticeComposerForm({ t }: { t: NoticeComposerMessages })
                 type="datetime-local"
                 value={startsAt}
                 onChange={(e) => setStartsAt(e.target.value)}
-                className="field w-full h-10 px-2 text-sm mt-1"
+                className="field w-full h-11 sm:h-10 px-2 text-base sm:text-sm mt-1"
               />
             </label>
             <label className="text-xs text-[#5B6470]">
@@ -221,7 +221,7 @@ export default function NoticeComposerForm({ t }: { t: NoticeComposerMessages })
                 type="datetime-local"
                 value={actionBy}
                 onChange={(e) => setActionBy(e.target.value)}
-                className="field w-full h-10 px-2 text-sm mt-1"
+                className="field w-full h-11 sm:h-10 px-2 text-base sm:text-sm mt-1"
               />
             </label>
           </div>
@@ -231,13 +231,13 @@ export default function NoticeComposerForm({ t }: { t: NoticeComposerMessages })
               onChange={(e) => setActionLabel(e.target.value)}
               placeholder={t.actionLabelPlaceholder}
               maxLength={40}
-              className="field w-full h-10 px-3 text-sm"
+              className="field w-full h-11 sm:h-10 px-3 text-base sm:text-sm"
             />
           )}
           <p className="text-xs text-[#98A0A9]">{t.clocksHint}</p>
 
           {/* ── Marks: importance, and the self-expiring banner pin ───────── */}
-          <label className="flex items-center gap-1.5 text-sm text-[#5B6470]">
+          <label className="flex items-center gap-1.5 min-h-11 sm:min-h-0 text-sm text-[#5B6470]">
             <input
               type="checkbox"
               checked={important}
@@ -251,7 +251,7 @@ export default function NoticeComposerForm({ t }: { t: NoticeComposerMessages })
           </label>
 
           <div className="flex flex-wrap items-center gap-1.5 text-sm text-[#5B6470]">
-            <label className="flex items-center gap-1.5">
+            <label className="flex items-center gap-1.5 min-h-11 sm:min-h-0">
               <input
                 type="checkbox"
                 checked={pinned}
@@ -265,14 +265,14 @@ export default function NoticeComposerForm({ t }: { t: NoticeComposerMessages })
               value={pinUntil}
               onChange={(e) => setPinUntil(e.target.value)}
               disabled={!pinned}
-              className="field h-9 px-2 text-sm disabled:opacity-50"
+              className="field h-11 sm:h-9 px-2 text-base sm:text-sm disabled:opacity-50"
             />
             <span className="text-xs text-[#98A0A9]">{t.featureHint}</span>
           </div>
 
           <label className="text-xs text-[#5B6470] block">
             {t.type}
-            <select value={kind} onChange={(e) => setKind(e.target.value)} className="field h-10 px-2 text-sm mt-1 ms-2">
+            <select value={kind} onChange={(e) => setKind(e.target.value)} className="field h-11 sm:h-10 px-2 text-base sm:text-sm mt-1 ms-2">
               {KINDS.map((k) => (
                 <option key={k} value={k}>
                   {t.kinds[k]}
@@ -282,18 +282,18 @@ export default function NoticeComposerForm({ t }: { t: NoticeComposerMessages })
           </label>
 
           {error && <p className="text-sm text-red-600">{error}</p>}
-          <div className="flex items-center justify-end gap-2 pt-1">
+          <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2 pt-1">
             <button
               type="button"
               onClick={() => {
                 setOpen(false);
                 setError(null);
               }}
-              className="btn-ghost h-9 px-4 text-sm"
+              className="btn-ghost h-11 sm:h-9 px-4 text-sm"
             >
               {t.cancel}
             </button>
-            <button onClick={publish} disabled={busy || !title.trim()} className="btn-primary h-9 px-4 text-sm">
+            <button onClick={publish} disabled={busy || !title.trim()} className="btn-primary h-11 sm:h-9 px-4 text-sm">
               {done ? `${t.published} ✓` : busy ? t.publishing : t.publish}
             </button>
           </div>

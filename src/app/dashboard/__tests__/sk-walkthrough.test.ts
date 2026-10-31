@@ -201,17 +201,21 @@ describe("the launcher's wiring (source pins)", () => {
   });
   it("auto-starts only from a home page, only while the intro is due, and records only that run", () => {
     expect(src).toMatch(/if \(!SK_ON \|\| autoTried \|\| !introPending \|\| !home \|\| tourActive\) return;/);
-    expect(src).toContain("if (!carried) start({ record: true });");
-    // Replays (the 🧭, the menu, "Show me around") start without record.
-    expect(src).toContain("useEffect(() => onSkWalkthroughRequest(() => start()), [start]);");
-    expect(src).toContain("onTakeTour={() => start()}");
+    expect(src).toContain('if (!carried) start({ record: true, via: "auto" });');
+    // Replays (the 🧭, the menu, "Show me around") start without record —
+    // each saying who asked (2026-10-31, the voice log's "walk" events).
+    expect(src).toContain('useEffect(() => onSkWalkthroughRequest(() => start({ via: "bus" })), [start]);');
+    expect(src).toContain("onTakeTour={(via) => start({ via })}");
+    // A spoken "show me around" the server answered with start_tour starts as
+    // "turn-voice", a typed one as "turn-text" (sk-shell's walkthrough event).
+    expect(code(read("sk-shell.tsx"))).toContain('onTakeTourRef.current?.(modality === "voice" ? "turn-voice" : "turn-text")');
   });
   it("a question mid-tour pauses it; SK answers through the normal turn", () => {
     expect(src).toContain("onEngaged={tour.onQuestion}");
     expect(read("sk-shell.tsx")).toMatch(/if \(walkRef\.current\?\.command\(q\)\) \{/);
   });
   it("'continue the tour' with no tour running starts one, with no turn (founder 2026-10-30)", () => {
-    expect(code(read("sk-shell.tsx"))).toMatch(/if \(!walkRef\.current && onTakeTourRef\.current && walkStartCommand\(q\)\) \{\s*setInput\(""\);\s*onTakeTourRef\.current\(\);\s*return;/);
+    expect(code(read("sk-shell.tsx"))).toMatch(/if \(!walkRef\.current && onTakeTourRef\.current && walkStartCommand\(q\)\) \{\s*setInput\(""\);\s*onTakeTourRef\.current\("phrase"\);\s*return;/);
   });
   it("the /present launcher carries the tour's words (a run resumes there); /sk has no launcher any more (SK Tutor retired 2026-10-31)", () => {
     expect(readSrc("app/present/present-client.tsx")).toContain("walkCopy={sk.walkCopy}");
@@ -289,10 +293,11 @@ describe("TourProvider stands down for SK users (founder decision 1)", () => {
 });
 
 describe("the version bump (founder decision 9)", () => {
-  it("sk-intro is v2, so everyone who heard v1 gets the walkthrough once — and only once", () => {
-    expect(SK_INTRO_TOUR).toEqual({ key: "sk-intro", version: 2 });
+  it("sk-intro is v3 (2026-10-31: the student Board), so everyone who heard v1 or v2 gets the walkthrough once — and only once", () => {
+    expect(SK_INTRO_TOUR).toEqual({ key: "sk-intro", version: 3 });
     expect(shouldAutoStart({ version: 1, status: "completed" }, SK_INTRO_TOUR.version)).toBe(true);
-    expect(shouldAutoStart({ version: 2, status: "skipped" }, SK_INTRO_TOUR.version)).toBe(false);
+    expect(shouldAutoStart({ version: 2, status: "completed" }, SK_INTRO_TOUR.version)).toBe(true);
+    expect(shouldAutoStart({ version: 3, status: "skipped" }, SK_INTRO_TOUR.version)).toBe(false);
     // The layout decides introDue from the same key and version.
     expect(read("layout.tsx")).toContain("skIntroDue = shouldAutoStart(skSeen, SK_INTRO_TOUR.version);");
     // The run posts that pair.

@@ -171,17 +171,17 @@ export default async function ProgressReportPage({
           would bleed everywhere. This <style> only exists on THIS page. */}
       <style>{`@media print { header { display: none !important } }`}</style>
       <AppHeader />
-      <main className="max-w-4xl mx-auto px-6 py-10 print:py-2">
+      <main className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-10 print:py-2">
         {/* The dated line that makes the printout stand on its own. */}
         <p className="hidden print:block text-sm text-[#5B6470] mb-4">
           SketchCast — {t.title} — {d(today.toISOString())}
         </p>
 
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-4xl mb-1">{t.title}</h1>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0">
+            <h1 className="text-3xl sm:text-4xl mb-1">{t.title}</h1>
             <InkUnderline className="block h-3 w-28 mb-3 print:hidden" />
-            <p className="text-2xl font-display mb-2">{learnerName}</p>
+            <p className="text-2xl font-display mb-2 break-words">{learnerName}</p>
             <p className="text-xs text-[#5B6470]">
               {fmt(t.preparedBy, { name: preparedBy })} · {fmt(t.generated, { date: d(today.toISOString()) })}
             </p>
@@ -216,7 +216,57 @@ export default async function ProgressReportPage({
                       {fmt(t.chaptersCovered, { list: section.chaptersCovered.join(", ") })}
                     </p>
                   )}
-                  <div className="card px-5 py-2 overflow-x-auto print:overflow-visible print:shadow-none">
+                  {/* Phone: one stacked card per item instead of a six-column
+                      table that only scrolled sideways inside its card. The
+                      table stays for sm and up, and for print at any width. */}
+                  <ul className="card divide-y divide-[#EEF0EC] sm:hidden print:hidden">
+                    {section.items.map((item) => (
+                      <li key={item.generationId} className="px-4 py-3 text-sm">
+                        <p className="font-medium break-words">{item.title || kindWord(item.kind)}</p>
+                        {item.title && <p className="text-xs text-[#98A0A9]">{kindWord(item.kind)}</p>}
+                        <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5">
+                          <div className="min-w-0">
+                            <dt className="text-[10px] uppercase tracking-wide text-[#98A0A9]">{t.columns.status}</dt>
+                            <dd>{statusWord(item.status)}</dd>
+                          </div>
+                          <div className="min-w-0">
+                            <dt className="text-[10px] uppercase tracking-wide text-[#98A0A9]">{t.columns.score}</dt>
+                            <dd>
+                              {item.score ? (
+                                <>
+                                  <span className="tabular">
+                                    {fmt(t.scoreValue, { points: item.score.points, max: item.score.max, pct: item.score.pct })}
+                                  </span>
+                                  <span className="block text-xs text-[#98A0A9]">
+                                    {fmt(t.gradingOn, {
+                                      grading:
+                                        (t.grading as Record<string, string>)[item.score.gradeStatus] ?? item.score.gradeStatus,
+                                      date: d(item.score.date),
+                                    })}
+                                  </span>
+                                </>
+                              ) : (
+                                "—"
+                              )}
+                            </dd>
+                          </div>
+                          <div className="min-w-0">
+                            <dt className="text-[10px] uppercase tracking-wide text-[#98A0A9]">{t.columns.assigned}</dt>
+                            <dd>{d(item.assignedAt)}</dd>
+                          </div>
+                          <div className="min-w-0">
+                            <dt className="text-[10px] uppercase tracking-wide text-[#98A0A9]">{t.columns.due}</dt>
+                            <dd>{item.dueAt ? d(item.dueAt) : "—"}</dd>
+                          </div>
+                          <div className="min-w-0">
+                            <dt className="text-[10px] uppercase tracking-wide text-[#98A0A9]">{t.columns.completed}</dt>
+                            <dd>{item.completedAt ? d(item.completedAt) : "—"}</dd>
+                          </div>
+                        </dl>
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="card px-5 py-2 overflow-x-auto hidden sm:block print:block print:overflow-visible print:shadow-none">
                     <table className="w-full">
                       <thead>
                         <tr className="border-b border-[#EEF0EC]">

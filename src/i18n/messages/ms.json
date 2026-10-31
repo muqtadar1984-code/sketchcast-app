@@ -156,7 +156,8 @@
       "partLoadFailed": "Bahagian {n} tidak dapat dimuatkan sekarang — tutup ini dan muat semula halaman untuk cuba lagi.",
       "multiPartHint": "Bahagian {n} daripada {total} (~15 min). Habiskan satu bahagian untuk menandakannya — bahagian terakhir melengkapkan pelajaran.",
       "singlePartHint": "Tonton sehingga habis untuk menandakan pelajaran ini selesai."
-    }
+    },
+    "learnWithSk": "Belajar dengan SK"
   },
   "app": {
     "auth": {
@@ -2077,6 +2078,73 @@
       "notTeaching": "Papan bilik darjah adalah untuk guru.",
       "plan": "Papan bilik darjah disertakan dengan Pro, Pro+ dan setiap pelan sekolah.",
       "back": "Kembali ke perpustakaan anda"
+    },
+    "learn": {
+      "title": "Pelajaran saya",
+      "pick": "Pilih pelajaran untuk belajar bersama SK.",
+      "empty": "Belum ada pelajaran. Apabila guru anda memberikannya, ia akan muncul di sini.",
+      "due": "Tarikh akhir {date}",
+      "overdue": "Tarikh akhir sudah lepas {date}",
+      "back": "Kembali ke pelajaran saya",
+      "close": "Tutup",
+      "loading": "Membuka pelajaran anda…",
+      "failed": "Pelajaran ini tidak dapat dibuka. Cuba lagi sebentar lagi.",
+      "prevPage": "Halaman sebelumnya",
+      "nextPage": "Halaman seterusnya",
+      "steps": {
+        "video": "Video",
+        "slides": "Slaid",
+        "worksheet": "Lembaran kerja"
+      },
+      "go": {
+        "video": "▶ Main video",
+        "slides": "Buka slaid",
+        "worksheet": "Buka lembaran kerja",
+        "next": "Langkah seterusnya"
+      },
+      "sk": {
+        "startVideo": "Hai! Jom mula dengan video. Tekan main apabila anda sedia, dan tanya saya apa sahaja pada bila-bila masa.",
+        "startSlides": "Hai! Jom mula dengan slaid. Tanya saya apa sahaja pada bila-bila masa.",
+        "startWorksheet": "Hai! Jom lihat lembaran kerja bersama-sama. Tanya saya jika anda tersekat.",
+        "toSlides": "Syabas! Sekarang jom lihat slaid.",
+        "toWorksheet": "Bagus sekali! Sekarang jom cuba lembaran kerja.",
+        "slidesOpen": "Ini slaidnya. Serlahkan mana-mana bahagian yang anda mahu saya terangkan.",
+        "slidesMissing": "Slaid belum sedia lagi, jadi jom terus ke lembaran kerja.",
+        "worksheetOpen": "Ini lembaran kerjanya. Baca setiap soalan dan cuba jawab. Tanya saya jika anda tersekat.",
+        "worksheetFailed": "Saya tidak dapat membuka lembaran kerja sekarang. Anda masih boleh tanya saya apa sahaja.",
+        "done": "Itu sahaja pelajaran ini. Syabas! Tanya saya tentang apa-apa yang anda kurang pasti.",
+        "empty": "Pelajaran ini belum ada apa-apa untuk ditunjukkan. Anda masih boleh bertanya kepada saya."
+      },
+      "practice": {
+        "answerLabel": "Jawapan anda",
+        "placeholder": "Taip jawapan anda",
+        "check": "Semak",
+        "checking": "Sedang menyemak…",
+        "help": "Saya perlukan bantuan",
+        "choose": "Pilih…",
+        "correct": "Betul! Bagus sekali.",
+        "incorrect": "Belum tepat lagi. Cuba sekali lagi.",
+        "shown": "Ini jawapannya. Baca, kemudian cuba taip.",
+        "review": "Dihantar kepada guru anda untuk ditanda.",
+        "failed": "Saya tidak dapat menyemaknya sekarang. Cuba lagi.",
+        "slowDown": "Sebentar — jawapan itu masih sedang disemak.",
+        "next": "Soalan seterusnya",
+        "score": "Markah anda: {correct}/{total}",
+        "hintOne": "1 petunjuk",
+        "hintMany": "{n} petunjuk",
+        "wellDone": "Bagus sekali! Anda telah menyiapkan lembaran kerja. Tanya saya apa-apa yang anda mahu ulang kaji.",
+        "keepGoing": "Usaha yang bagus! Mari kita teruskan berlatih. Tanya saya tentang soalan yang anda rasakan sukar.",
+        "rung": {
+          "hint": "Petunjuk",
+          "step": "Langkah berjawapan",
+          "answer": "Jawapan"
+        },
+        "generic": {
+          "hint": "Baca soalan sekali lagi perlahan-lahan dan cari kata kunci.",
+          "step": "Pecahkannya kepada langkah-langkah kecil. Apa yang anda sudah tahu, dan apa yang ditanya oleh soalan?",
+          "answer": "Bandingkan jawapan ini dengan jawapan anda dan lihat di mana bezanya."
+        }
+      }
     }
   },
   "kits": {
@@ -2163,6 +2231,13 @@
         "sources": "Sumber",
         "chapter": "bab {n}",
         "from": "Sumber: {source}"
+      },
+      "teach": {
+        "gapNote": "Nampaknya soalan ini agak sukar — biar saya ajar dengan cara lain.",
+        "extraOffer": "Syabas — anda sudah tamatkan pelajaran ini! Mahu satu langkah Tambahan yang pendek untuk pergi lebih jauh?",
+        "extraYes": "Tunjukkan",
+        "extraNo": "Bukan sekarang",
+        "pictureFrom": "Daripada slaid pelajaran anda — slaid {n}"
       },
       "gap": {
         "thumb": "Ini tidak membantu",
@@ -2692,7 +2767,7 @@
         "downloadsNone": "Setiap bahagian dimuat turun sedia disunting, dengan skema jawapannya sendiri.",
         "rerun": "Pena kecil membuat semula satu bahagian dengan kredit; salinan pelajar yang sudah ditugaskan kekal.",
         "rerunNone": "Pena kecilnya membuat semula satu bahagian, dan × membuangnya.",
-        "assign": "Tugaskan menghantar kit ini ke kelas dengan tarikh akhir, atau sebut 'tugaskan lembaran kerja kepada 5A untuk hari Jumaat'.",
+        "assign": "Tugaskan menghantar kit ini ke kelas dengan tarikh akhir; murid kemudian mempelajarinya bersama saya di Papan mereka sendiri.",
         "assignChapter": "Tugaskan bab menghantar semua yang siap dalam bab ini kepada kelas, dengan tarikh akhir.",
         "assignNone": "Sebaik sahaja anda menjana kit, anda boleh menugaskannya kepada kelas dari sini.",
         "boardBridge": "Kit yang dijana juga boleh dimainkan di Papan bilik darjah, yang akan kita lihat sebentar lagi.",
@@ -2736,6 +2811,12 @@
         "openLessonEmpty": "Belum ada tugasan; pelajaran daripada guru anda akan muncul di sini.",
         "progress": "Ini menunjukkan apa yang siap dan apa yang tinggal; lembaran kerja menerima foto jawapan anda, dan kuiz ditanda serta-merta.",
         "progressEmpty": "Apabila anda ada kerja, ini menjejak apa yang siap dan apa yang tinggal.",
+        "learnWithSk": "Belajar dengan SK membuka pelajaran itu di Papan anda sendiri, tempat saya mengajarnya kepada anda.",
+        "learnWithSkEmpty": "Apabila pelajaran tiba, Belajar dengan SK membukanya di Papan anda sendiri, tempat saya mengajarnya kepada anda.",
+        "learnBoard": "Saya memimpin setiap pelajaran di sini: video, slaid, kemudian lembaran kerja, {learnAsk}dan anda boleh bertanya apa sahaja atau serlahkan perkataan untuk bertanya. {learnPractice}Pada lembaran kerja, ketik Semak atau 'Saya perlukan bantuan'; jika masih sukar, saya akan mengajarnya dengan cara lain dalam sembang kita.",
+        "learnSteps": "Saya memimpin setiap pelajaran di sini: video, kemudian slaid, kemudian lembaran kerja.",
+        "learnAsk": "Tanya saya apa sahaja, atau serlahkan perkataan pada papan untuk bertanya tentangnya.",
+        "learnPractice": "Pada lembaran kerja, ketik Semak atau 'Saya perlukan bantuan'; jika masih sukar, saya akan mengajarnya dengan cara lain dalam sembang kita.",
         "myBooks": "Buku saya menyimpan buku SketchCast anda; untuk menambah, sebut 'aktifkan kod buku saya'.",
         "myBooksNone": "Buku SketchCast anda akan muncul di bawah Buku saya; sebut 'aktifkan kod buku saya' untuk menambah.",
         "diaryTimetable": "Bar atas ada diari kelas dan jadual waktu minggu anda.",
@@ -2749,7 +2830,7 @@
       },
       "parent": {
         "hello": "Saya SK, sedia membantu anda memantau anak-anak: ketik untuk mendengar saya.",
-        "childCard": "Kad setiap anak menunjukkan kerja sekolah, tarikh akhir, markah dan komen guru.",
+        "childCard": "Kad setiap anak menunjukkan kerja sekolah, tarikh akhir, markah dan komen; mereka boleh belajar bersama saya, dan anda akan melihat kemajuan mereka.",
         "childUnverified": "Pautan ini menunggu pengesahan sekolah; sehingga itu saya tidak boleh membincangkan anak ini.",
         "week": "Minggu ini menunjukkan apa yang siap, lewat atau menunggu ditanda, serta nota diari baharu.",
         "weekSteps": "Di bawah ada hingga dua langkah seterusnya; tanya 'bagaimana anak-anak saya?' bila-bila masa.",
