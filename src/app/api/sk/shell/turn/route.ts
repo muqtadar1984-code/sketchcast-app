@@ -45,7 +45,35 @@ import { maskBookSecrets } from "@/sk/book-activate";
 import { TEACH_AUDIENCE_CLASS, TEACH_AUDIENCE_STUDENT, TEACH_MAX_TOKENS, clipWords, teachingBlock, teachingQuestion, teachingSupport, teachingSupportTokens, type TeachRef, type TeachTarget, type TeachingSupport } from "@/sk/shell/teach";
 import { loadSelectionSlide, selectionBlock, selectionOnSlide, selectionQuestion, selectionSupportTokens, type SelectionAdmin } from "@/sk/shell/selection";
 import { BOARD_NO_MAP, BOARD_SELECTION_NO_SLIDE, sayFor } from "@/sk/capabilities/board";
-import { openUnitDeckSlide } from "@/sk/capabilities/documents";
+import { openUnitAnswer, openUnitDeckPicture, openUnitDeckSlide } from "@/sk/capabilities/documents";
+// 2026-10-31 (student Board phase 3): SK teaches beyond the kit, in the chat.
+import {
+  TEACH_CHECK_MAX_TOKENS,
+  TEACH_LESSON_MAX_TOKENS,
+  addTaught,
+  bestSlide,
+  checkReplyPrompt,
+  confusionOf,
+  guardAnswer,
+  headingsFor,
+  kitParts,
+  looksLikeAnswer,
+  ownLineIssues,
+  parseLesson,
+  parseTeachRequest,
+  renderLesson,
+  teachQuestion,
+  teachSystem,
+  teachTurnText,
+  type SkTeachRequest,
+  type TeachLesson,
+} from "@/sk/shell/learn-teach";
+import { personNameWords } from "@/sk/shell/prompt";
+import { readManifest } from "@/sk/manifest/store";
+import { noteLearning } from "@/sk/facts";
+import type { ConsentDb } from "@/sk/consent";
+import { supportFrom } from "@/sk/shell/teach";
+import type { Passage } from "@/sk/knowledge/answer";
 // 2026-10-31: tool-call markup never reaches the bubble, the voice or the memory.
 import { COULD_NOT_DO, cleanReply, stripToolMarkup } from "@/sk/shell/markup";
 import { searchLibrary } from "@/sk/capabilities/library";
@@ -161,7 +189,10 @@ async function gate(): Promise<Gate> {
 function parseBody(raw: unknown): SkTurnRequest | { error: string } {
   if (!raw || typeof raw !== "object") return { error: "Invalid body." };
   const b = raw as Record<string, unknown>;
-  const text = typeof b.text === "string" ? b.text.trim() : "";
+  // 2026-10-31 (student Board phase 3): a teaching turn SK starts by itself
+  // (a worksheet gap, the Extra step) carries no typed line of hers.
+  const teach = parseTeachRequest(b.teach);
+  const text = typeof b.text === "string" && b.text.trim() ? b.text.trim() : teach ? teachTurnText(teach) : "";
   if (!text) return { error: "Say something." };
   if (text.length > MAX_TEXT) return { error: `Keep it under ${MAX_TEXT} characters.` };
   const turnId = typeof b.turnId === "string" && b.turnId.trim() && b.turnId.length <= 80 ? b.turnId.trim() : "";
@@ -185,7 +216,7 @@ function parseBody(raw: unknown): SkTurnRequest | { error: string } {
   const memory = typeof b.memory === "string" && b.memory.length <= 64_000 ? b.memory : undefined;
   const spokenLang = modality === "voice" && typeof b.spokenLang === "string" && b.spokenLang.length <= 12 ? b.spokenLang : undefined;
   const walk = parseWalk(b.walk);
-  return { turnId, text, modality, collector, memory, ...(spokenLang ? { spokenLang } : {}), ...(walk ? { walk } : {}) };
+  return { turnId, text, modality, collector, memory, ...(spokenLang ? { spokenLang } : {}), ...(walk ? { walk } : {}), ...(teach ? { teach } : {}) };
 }
 
 /** 2026-10-30: the client's tour position — display only (a stop id and two
@@ -307,6 +338,11 @@ export async function POST(request: Request) {
   // this turn — its own sk.note_gap, a built-in refusal, a failed tool, a
   // grounding drop — noted here and written ONCE in finish(), after the reply.
   const gaps = new TurnGaps();
+  // 2026-10-31 (student Board phase 3): a TEACHING turn — SK's short lesson in
+  // the chat, or its reply to her check answer. Teaching is SK doing its job,
+  // not missing it: such a turn writes no gap rows unless SK FAILED it (the
+  // model errored or wrote nothing usable — `failed`).
+  const teachTurn: { on: boolean; failed: boolean } = { on: false, failed: false };
   // S2: the greeting's one-turn offer ("Your kit for … is ready — want me to
   // open it?"). A bare yes / "open it" opens it, a no declines; anything else
   // runs as usual and the offer lapses (rememberTurn drops it).
@@ -477,6 +513,53 @@ export async function POST(request: Request) {
     };
   };
 
+  /** Phase 3: what a lesson in the chat stands on — the lesson map's segment
+   *  for the concept (a worksheet item's OWN segment first, then the concept
+   *  by name, then the slide on screen) and the kit's own book passages for
+   *  it. Both as DATA; either may be missing (the lesson is then Extra). */
+  const lessonSupport = async (
+    req: SkTeachRequest,
+    concept: string,
+  ): Promise<{ sup: Extract<TeachingSupport, { status: "ready" }> | null; passages: Passage[] }> => {
+    let sup: Extract<TeachingSupport, { status: "ready" }> | null = null;
+    let kit: { bookId: string | null; articleId: string | null } | null = null;
+    if (admin && boardGen) {
+      try {
+        const r = await readManifest(admin, boardGen);
+        if (r.status === "ready") {
+          const m = r.manifest;
+          kit = { bookId: m.book_id ?? null, articleId: m.article_id ?? null };
+          const item = req.questionId ? m.items.find((i) => i.q_id === req.questionId) : undefined;
+          const here = ctx.board?.segmentId ? ({ segmentId: ctx.board.segmentId } as TeachRef) : refFor(ctx.board?.k, null);
+          const tries: TeachRef[] = [...(item?.segment_ids?.[0] ? [{ segmentId: item.segment_ids[0] }] : []), ...(concept ? [{ concept }] : []), ...(here ? [here] : [])];
+          for (const ref of tries) {
+            const s = supportFrom(m, ref);
+            if (s.status === "ready") {
+              sup = s;
+              break;
+            }
+          }
+        }
+      } catch {
+        sup = null;
+      }
+    }
+    let passages: Passage[] = [];
+    const q = concept || sup?.segments[0]?.heading || "";
+    if (kit && (kit.bookId || kit.articleId) && q) {
+      try {
+        const own = await kitOwnSources(ctx, deps, kit);
+        if (own.length) {
+          const k = await searchForUser(ctx, deps, { query: q, restrict: own, limit: 3 });
+          if (k.status === "ok") passages = k.passages.slice(0, 3);
+        }
+      } catch {
+        passages = [];
+      }
+    }
+    return { sup, passages };
+  };
+
   /** explain_selection: the highlighted part of a deck slide, explained from
    *  the slide's own text and notes. Called only after the capability said
    *  the selection is hers. Never moves the Board. */
@@ -585,7 +668,9 @@ export async function POST(request: Request) {
         // (founder decision 2026-10-31); every log line still masks them.
         if (!gapsWritten) {
           gapsWritten = true;
-          const rows = gaps.rows({
+          // A teaching turn SK carried out is not a gap (its lesson can say
+          // "you can't divide by zero" without the phrase net taking it).
+          const rows = teachTurn.on && !teachTurn.failed ? [] : gaps.rows({
             turnId: body.turnId,
             userId: g.user.id,
             role: ctx.user.role,
@@ -682,6 +767,8 @@ export async function POST(request: Request) {
         entities: ResolvedEntity[],
         pending?: SkMemory["pending"] | null,
         lang?: { langOverride: SkAnswerLang | null },
+        /** Phase 3: the conversation's taught concepts, and SK's check question for the next turn. */
+        taughtMem?: { taught?: string[]; teachCheck?: { concept: string; question: string } },
       ) => {
         assistantText = shown(assistantText, "memory");
         // S4 slice D: a book code / order number typed to SK is never remembered
@@ -706,6 +793,8 @@ export async function POST(request: Request) {
             // confident question does (sticky; null clears).
             ...(lang ? { langOverride: lang.langOverride } : !langTurn && question && sticky !== (memory.langOverride ?? null) ? { langOverride: sticky } : {}),
             ...(noted ? { langNoted: noted } : {}),
+            ...(taughtMem?.taught ? { taught: taughtMem.taught } : {}),
+            ...(taughtMem?.teachCheck ? { teachCheck: taughtMem.teachCheck } : {}),
           },
           new Date(),
         );
@@ -967,6 +1056,183 @@ export async function POST(request: Request) {
         }
       };
 
+      /** Phase 3: SK could not teach (the model failed or wrote nothing usable).
+       *  The ONE teaching outcome the gap tracker records. */
+      const teachFailed = (where: string, error: string, usage?: { inputTokens: number; outputTokens: number }) => {
+        teachTurn.failed = true;
+        gaps.note("tool_failed", { tool: where, error });
+        const text = lineFor(COULD_NOT_DO, ctx.user.locale);
+        send({ type: "text", text });
+        done({ sources: [], label: "declined", ...(usage ? { usage } : {}) }, text, []);
+      };
+
+      /**
+       * Phase 3 (student Board, 2026-10-31): SK TEACHES in the chat — a short
+       * structured lesson (learn-teach.ts): idea → steps → a worked example
+       * with new numbers → a check question. ONE model call, no tools, SK's
+       * shell model through the same provider path (Bedrock overlay) as every
+       * other SK turn. Grounded on the lesson map and the kit's book first;
+       * what the kit does not carry is labelled Extra. The worksheet's answer
+       * is never sent to the model and any line carrying it is dropped.
+       */
+      const runTeach = async (req: SkTeachRequest, conceptIn: string | null) => {
+        teachTurn.on = true;
+        timing.route = `teach_${req.trigger}`;
+        const segHeading = typeof ctx.board?.k === "number" ? ctx.board.segments?.find((x) => x.k === ctx.board?.k)?.heading : undefined;
+        let concept = (conceptIn || req.concept || (req.questionText ? clipWords(req.questionText, 120) : "") || "").trim();
+        const { sup, passages } = await lessonSupport(req, concept || segHeading || "");
+        concept = concept || sup?.segments[0]?.concept || sup?.segments[0]?.heading || segHeading || "this lesson";
+        const tl = langOver([sup?.language, ...passages.map((p) => p.language)].filter((x): x is string => !!x));
+        // The kit's own picture, looked up beside the model call (students only: her deck).
+        const picture = ctx.user.role === "student" ? openUnitDeckPicture(ctx, concept, bestSlide, g.supabase).catch(() => null) : Promise.resolve(null);
+        const provider = new AnthropicProvider(process.env.SK_SHELL_MODEL || SK_SHELL_DEFAULT_MODEL, skProviderTarget());
+        const system = teachSystem({
+          req,
+          concept,
+          language: languageName(tl.lang),
+          blocks: [sup ? teachingBlock(sup) : "", passages.length ? knowledgeBlock(passages) : ""],
+          lessonTitle: sup?.segments[0]?.heading || segHeading || null,
+          taught: memory.taught,
+        });
+        let full = "";
+        let usage: { inputTokens: number; outputTokens: number } | undefined;
+        let failed = false;
+        for await (const ev of runAssistantTurn({ provider, system, history: [], question: teachQuestion({ req, concept, language: languageName(tl.lang) }), tools: undefined, maxToolRounds: 0, maxTokens: TEACH_LESSON_MAX_TOKENS, signal: abort.signal })) {
+          if (ev.type === "text") full += ev.text;
+          else if (ev.type === "done" || ev.type === "cancelled") usage = ev.usage;
+          else if (ev.type === "error") {
+            failed = true;
+            console.error("sk-shell.turn learn teach", ev.retryable ? "retryable" : "fatal", ev.message);
+          }
+        }
+        if (abort.signal.aborted) return;
+        const parsed = failed ? null : parseLesson(unmarked(full, "learn_teach"));
+        if (!parsed) return teachFailed("sk.teach", failed ? "provider" : full.trim() ? "unparsed" : "empty", usage);
+
+        // 1. No claimed action (a lesson has no tools: "I've sent …" is unbacked).
+        let claimDrops = 0;
+        const claimFree = (s: string) => {
+          const r = actionClaimGuard(s);
+          if (r.dropped.length) claimDrops++;
+          return r.text.trim();
+        };
+        let lesson: TeachLesson = {
+          ...parsed,
+          title: claimFree(parsed.title),
+          idea: claimFree(parsed.idea),
+          steps: parsed.steps.map(claimFree).filter(Boolean),
+          example: claimFree(parsed.example),
+          work: parsed.work.map(claimFree).filter(Boolean),
+          result: claimFree(parsed.result),
+          check: claimFree(parsed.check),
+        };
+        // 2. The idea and steps must stand on the kit (strict, §9.3) — or the
+        //    lesson is Extra. The Extra step after the kit always is.
+        const kitSupport: unknown[] = [...(sup ? teachingSupportTokens(sup) : []), ...(passages.length ? knowledgeSupportTokens(passages) : [])];
+        const asked = [body.text, req.questionText ?? "", concept].join(" ");
+        let extra = req.trigger === "extra" || lesson.source === "extra" || kitSupport.length === 0;
+        if (!extra && !kitParts(lesson).every((p) => groundingCheck(p, [...kitSupport, concept], asked).ok)) extra = true;
+        // 3. Every line SK wrote itself: no invented person, no contact or link.
+        const supportText = [asked, ...kitSupport.flat(2).filter((x) => typeof x === "string" || typeof x === "number")].join(" ");
+        let ownDrops = 0;
+        const own = (s: string) => {
+          if (s && ownLineIssues(s, supportText, personNameWords).length) {
+            ownDrops++;
+            return "";
+          }
+          return s;
+        };
+        lesson = extra
+          ? { ...lesson, title: own(lesson.title), idea: own(lesson.idea), steps: lesson.steps.map(own).filter(Boolean), example: own(lesson.example), work: lesson.work.map(own).filter(Boolean), result: own(lesson.result), check: own(lesson.check) }
+          : { ...lesson, title: own(lesson.title), example: own(lesson.example), work: lesson.work.map(own).filter(Boolean), result: own(lesson.result), check: own(lesson.check) };
+        // 4. Never her worksheet's answer (read here, server-side only, for this check).
+        const answerKey = req.trigger === "gap" ? await openUnitAnswer(ctx, req, g.supabase).catch(() => null) : null;
+        const guarded = guardAnswer(lesson, { answer: answerKey, questionText: req.questionText, concept });
+        lesson = guarded.lesson;
+        if (!lesson.idea && !lesson.steps.length) return teachFailed("sk.teach", "nothing_left", usage);
+
+        const text = renderLesson(lesson, headingsFor(linesLocale(tl.lang)), extra);
+        const pic = await picture;
+        const trimmed = claimDrops + ownDrops + guarded.removed > 0;
+        const citations = !extra && passages.length ? citationsOf(passages).slice(0, 3) : [];
+        sendLang(tl.lang);
+        send({ type: "text", text });
+        if (pic) send({ type: "picture", generationId: pic.generationId, n: pic.n, title: pic.title });
+        done(
+          {
+            sources: ["sk.teach", ...(sup ? ["manifest"] : []), ...(passages.length ? ["knowledge.search"] : [])],
+            label: extra ? "supplementary" : "grounded",
+            ...(usage ? { usage } : {}),
+            ...(trimmed ? { trimmed: true } : {}),
+            ...(citations.length ? { citations } : {}),
+            teach: { trigger: req.trigger, extra },
+          },
+          text,
+          [],
+          undefined,
+          undefined,
+          { taught: addTaught(memory.taught, concept), ...(lesson.check ? { teachCheck: { concept, question: lesson.check } } : {}) },
+        );
+        // Server-side only: never the answer, never her words.
+        console.info(
+          "sk-shell.teach",
+          JSON.stringify({
+            turnId: body.turnId,
+            trigger: req.trigger,
+            reason: req.reason ?? null,
+            concept: concept.slice(0, 80),
+            extra,
+            manifest: !!sup,
+            passages: passages.length,
+            picture: !!pic,
+            answerKnown: !!answerKey,
+            answerGuard: guarded.removed,
+            dropped: { claims: claimDrops, own: ownDrops },
+            lang: tl.lang,
+          }),
+        );
+        // 4 (plan item): "taught" is remembered per student + concept in the
+        // 0173 learning facts — consent first (noteLearning is a no-op
+        // without it). TODO(phase 4): key it to the concept's objective
+        // (objective-key.ts) once phase 2's practice attempts (0178) carry one.
+        if (admin && ctx.user.role === "student") {
+          const db = admin as unknown as FactsDb & ConsentDb;
+          const note = { concept: concept.slice(0, 160), trigger: req.trigger, extra, generation_id: boardGen, ...(req.questionId ? { question_id: req.questionId } : {}), lang: tl.lang };
+          later(() => noteLearning(db, g.user.id, { kind: "explained", objectiveKey: null, detail: note, source: "sk.board.teach" }));
+        }
+      };
+
+      /** Phase 3: her answer to SK's check question — ONE short call: right or
+       *  not, and the step she missed (SK's own practice, not the worksheet). */
+      const runCheckReply = async (check: { concept: string; question: string }) => {
+        teachTurn.on = true;
+        timing.route = "teach_check";
+        const provider = new AnthropicProvider(process.env.SK_SHELL_MODEL || SK_SHELL_DEFAULT_MODEL, skProviderTarget());
+        const p = checkReplyPrompt(check, body.text, languageName(answer.lang));
+        let full = "";
+        let usage: { inputTokens: number; outputTokens: number } | undefined;
+        let failed = false;
+        for await (const ev of runAssistantTurn({ provider, system: p.system, history: [], question: p.question, tools: undefined, maxToolRounds: 0, maxTokens: TEACH_CHECK_MAX_TOKENS, signal: abort.signal })) {
+          if (ev.type === "text") full += ev.text;
+          else if (ev.type === "done" || ev.type === "cancelled") usage = ev.usage;
+          else if (ev.type === "error") {
+            failed = true;
+            console.error("sk-shell.turn learn check", ev.retryable ? "retryable" : "fatal", ev.message);
+          }
+        }
+        if (abort.signal.aborted) return;
+        const said = failed ? "" : actionClaimGuard(unmarked(full, "learn_check")).text;
+        const support = [check.concept, check.question, body.text].join(" ");
+        const text = said
+          .split(/(?<=[.!?؟।])\s+/u)
+          .filter((s) => s.trim() && !ownLineIssues(s, support, personNameWords).length)
+          .join(" ")
+          .trim();
+        if (!text) return teachFailed("sk.teach.check", failed ? "provider" : "empty", usage);
+        send({ type: "text", text });
+        done({ sources: ["sk.teach"], label: "supplementary", ...(usage ? { usage } : {}), teach: { trigger: "check", extra: false } }, text, []);
+      };
+
       try {
         send({ type: "meta", sessionId: memory.sessionId, turnId: body.turnId, intent: decision.intent, capabilities: allowed.map((c) => c.meta.name) });
         // (A language command announces its own language.)
@@ -1086,6 +1352,34 @@ export async function POST(request: Request) {
           }
           finish();
           return;
+        }
+
+        // ── 2026-10-31 (student Board phase 3): SK teaches beyond the kit ────
+        // On her own Board, before any Board move: a teaching turn the Board
+        // started (a worksheet gap, the Extra step); her answer to SK's check
+        // question; or she is lost ("I don't get it", "explain again", the same
+        // question again) — SK switches to teach mode for that concept.
+        if (studentOnBoard(ctx)) {
+          if (body.teach) {
+            await runTeach(body.teach, null);
+            finish();
+            return;
+          }
+          // Model routing decides nothing here, so the rules (pure) say whether
+          // this is a Board command ("next page") rather than words of hers.
+          const ruled = routing === "model" ? routeByRules(body.text, ctx, now, body.collector.clock) : decision;
+          const check = memory.teachCheck;
+          if (check && ruled.intent === "ask" && looksLikeAnswer(body.text)) {
+            await runCheckReply(check);
+            finish();
+            return;
+          }
+          const confused = ruled.intent === "ask" || (ruled.intent === "teach" && ruled.move === "explain") ? confusionOf(body.text, memory.turns) : null;
+          if (confused) {
+            await runTeach({ trigger: "confusion" }, confused.concept);
+            finish();
+            return;
+          }
         }
 
         // ── S3 slice D: a STUDENT turn never reaches the teacher model ───────

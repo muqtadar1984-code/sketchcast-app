@@ -24,7 +24,7 @@
 
 import { createAdminClient } from "@/utils/supabase/admin";
 import type { SkCapability, SkCapabilityDeps, SkCapabilityResult, SkContext } from "@/sk/shell/types";
-import { DOC_NAMES, deckSlides, docsOf, kitOfGeneration, productChapterKits, readDoc, type DocEntry, type DocsAdmin, type KitDocs, type ReadOut } from "@/sk/kit-docs";
+import { DOC_NAMES, deckSlides, docsOf, kitOfGeneration, productChapterKits, questionsOf, readDoc, type DocEntry, type DocsAdmin, type KitDocs, type ReadOut } from "@/sk/kit-docs";
 import { searchForUser } from "./knowledge";
 import { learnerKitOfGeneration, type LearnerSession } from "@/sk/learner-kit";
 
@@ -351,6 +351,73 @@ export async function openUnitDeckSlide(ctx: SkContext, deckId: string, n: numbe
     if (!piece || (ctx.user.role !== "student" && piece.owner_id !== ctx.user.id)) return null;
     const slides = await deckSlides(admin, piece);
     return slides?.find((x) => x.n === n) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// ── SK teaching in the chat (student Board phase 3, 2026-10-31) ─────────────
+
+/**
+ * A PICTURE for a concept SK teaches: the open unit's own deck slide that
+ * best shows it (its text map's titles and words — learn-teach.ts bestSlide).
+ * Only the kit's deck, never a new image; the chat shows the slide's rendered
+ * page through /api/present/deck-pages, which re-checks the deck is hers.
+ * Null when the kit has no deck, its text map is not there, or nothing fits.
+ */
+export async function openUnitDeckPicture(
+  ctx: SkContext,
+  concept: string,
+  pick: (slides: UnitSlide[], concept: string) => UnitSlide | null,
+  session?: LearnerSession,
+): Promise<{ generationId: string; n: number; title: string } | null> {
+  const gid = ctx.board?.sessionId ? ctx.board.generationId : undefined;
+  if (!gid || !UUID.test(gid) || !concept.trim()) return null;
+  const admin = docsAdmin();
+  if (!admin) return null;
+  try {
+    const kit = await boardKit(admin, ctx, gid, session);
+    const deck = kit?.pieces.find((p) => p.kind === "deck");
+    if (!deck || (ctx.user.role !== "student" && deck.owner_id !== ctx.user.id)) return null;
+    const slides = await deckSlides(admin, deck);
+    const hit = slides?.length ? pick(slides, concept) : null;
+    return hit ? { generationId: deck.id, n: hit.n, title: hit.title } : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The ANSWER to one worksheet question of the open unit, read on the server
+ * ONLY so SK's lesson can be checked for it (learn-teach.ts guardAnswer). It
+ * is never put in a prompt, an event, a log or the memory. The question is
+ * found by its id (questions.json `id`, else `q<n>`), else by its exact
+ * words, in the piece the Board named (when it is part of HER kit) or the
+ * kit's question documents. Null when nothing matches.
+ */
+export async function openUnitAnswer(
+  ctx: SkContext,
+  q: { generationId?: string; questionId?: string; questionText?: string },
+  session?: LearnerSession,
+): Promise<string | null> {
+  const gid = ctx.board?.sessionId ? ctx.board.generationId : undefined;
+  if (!gid || !UUID.test(gid) || (!q.questionId && !q.questionText)) return null;
+  const admin = docsAdmin();
+  if (!admin) return null;
+  try {
+    const kit = await boardKit(admin, ctx, gid, session);
+    if (!kit) return null;
+    const named = q.generationId ? kit.pieces.filter((p) => p.id === q.generationId) : [];
+    const pieces = (named.length ? named : kit.pieces).filter((p) => p.artifacts.some((a) => a.kind === "questions_json"));
+    const want = q.questionText ? fold(q.questionText) : "";
+    for (const piece of pieces) {
+      const qs = await questionsOf(admin, piece, true);
+      const hit =
+        qs?.find((x) => !!q.questionId && (x.id === q.questionId || `q${x.n}` === q.questionId || String(x.n) === q.questionId)) ??
+        (want ? qs?.find((x) => fold(x.prompt) === want) : undefined);
+      if (hit?.answer) return hit.answer;
+    }
+    return null;
   } catch {
     return null;
   }

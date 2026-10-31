@@ -2202,6 +2202,13 @@
         "chapter": "chap. {n}",
         "from": "Source : {source}"
       },
+      "teach": {
+        "gapNote": "Celle-ci a l'air difficile — je vais t'expliquer autrement.",
+        "extraOffer": "Bravo — tu as terminé cette leçon ! Tu veux une petite étape bonus pour aller un peu plus loin ?",
+        "extraYes": "Montre-moi",
+        "extraNo": "Pas maintenant",
+        "pictureFrom": "Tiré des diapositives de ta leçon — diapositive {n}"
+      },
       "gap": {
         "thumb": "Cela ne m'a pas aidé",
         "ask": "Que vouliez-vous ?",
