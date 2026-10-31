@@ -2114,6 +2114,36 @@
         "worksheetFailed": "Não consegui abrir a ficha agora. Mesmo assim, podes perguntar-me o que quiseres.",
         "done": "É toda a lição. Muito bem! Pergunta-me o que não tiveres a certeza.",
         "empty": "Esta lição ainda não tem nada para mostrar. Mesmo assim, podes fazer-me uma pergunta."
+      },
+      "practice": {
+        "answerLabel": "Sua resposta",
+        "placeholder": "Digite sua resposta",
+        "check": "Verificar",
+        "checking": "Verificando…",
+        "help": "Preciso de ajuda",
+        "choose": "Escolha…",
+        "correct": "Correto! Muito bem.",
+        "incorrect": "Não exatamente. Tente de novo.",
+        "shown": "Aqui está a resposta. Leia e depois tente digitá-la.",
+        "review": "Enviada ao seu professor para correção.",
+        "failed": "Não consegui verificar agora. Tente novamente.",
+        "slowDown": "Só um momento — essa resposta ainda está sendo verificada.",
+        "next": "Próxima pergunta",
+        "score": "Sua pontuação: {correct}/{total}",
+        "hintOne": "1 dica",
+        "hintMany": "{n} dicas",
+        "wellDone": "Muito bem! Você terminou a folha de exercícios. Pergunte-me sobre o que quiser revisar.",
+        "keepGoing": "Bom esforço! Vamos continuar praticando. Pergunte-me sobre qualquer questão que achou difícil.",
+        "rung": {
+          "hint": "Dica",
+          "step": "Passo resolvido",
+          "answer": "Resposta"
+        },
+        "generic": {
+          "hint": "Leia a pergunta de novo, devagar, e procure as palavras-chave.",
+          "step": "Divida em pequenos passos. O que você já sabe e o que a pergunta está pedindo?",
+          "answer": "Compare esta resposta com a sua e veja onde elas diferem."
+        }
       }
     }
   },

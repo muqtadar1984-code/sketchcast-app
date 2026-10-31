@@ -12,6 +12,8 @@ import SkLauncher from "@/app/dashboard/sk-launcher";
 import type { SkShellCopy } from "@/app/dashboard/sk-shell";
 import BoardSession, { framesCapturable, videoParts, type BoardIO, type SessionInfo, type SessionKit } from "./board-session";
 import { firstStep, nextLine, nextStep, openingLine, type CoachAvail, type CoachLines, type CoachStep } from "./learner-coach";
+import { PracticePanel, usePractice } from "./practice-panel";
+import type { TextCard } from "@/board/model";
 import type { BoardController, BoardUnit } from "./board-controller";
 import { createBoardBridge, httpManifestFetch, loadManifest, toBridgeManifest, type BridgeManifest, type BridgeRun, type ManifestStatus } from "./sk-board-bridge";
 import { prepareDeck, type DeckPagesReply, type DeckStatus } from "./deck-load";
@@ -104,8 +106,10 @@ type Props = {
   learner?: { kits: LearnerKitOption[] } | null;
 };
 
-/** A learner session's id: local only (nothing is written for it), a uuid so
- *  the SK turn's audit rows can carry it like a teacher's session id. */
+/** A learner session's id: a uuid so the SK turn's audit rows can carry it
+ *  like a teacher's session id. Since phase 2 (worksheet practice) it is also
+ *  the PRACTICE session's id: the answer route creates that row under it on
+ *  her first answer (sk_practice_sessions, 0178). */
 function localSessionId(): string {
   try {
     if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
@@ -804,6 +808,17 @@ export default function PresentClient({
     if (!sid) return;
     setSaid({ session: sid, key: `${sid}:${Date.now()}:${Math.random().toString(36).slice(2, 7)}`, text });
   }, [sid]);
+  // Worksheet practice (phase 2): her answers, checked on the server, and the
+  // help ladder — kept here so they survive turning pages.
+  const practiceState = usePractice({ sessionId: sid, kitId: learnerMode ? kitId : null, words: learn.practice, say });
+  const boolWords = useMemo(() => ({ answerTrue: t.board.answerTrue, answerFalse: t.board.answerFalse }), [t]);
+  const nextQuestion = useCallback(() => void controller?.nextQuestion().catch(() => {}), [controller]);
+  const renderPractice = useCallback(
+    (o: { card: TextCard; cards: readonly TextCard[] }) => (
+      <PracticePanel key={`${o.card.generationId}:${o.card.questionId}`} card={o.card} cards={o.cards} practice={practiceState} words={learn.practice} boolWords={boolWords} onNext={nextQuestion} />
+    ),
+    [practiceState, learn.practice, boolWords, nextQuestion],
+  );
   const goNext = useCallback(() => {
     if (!sid || !step) return;
     const next = nextStep(step, avail);
@@ -939,6 +954,7 @@ export default function PresentClient({
             learner
             banner={coachBar}
             onVideoEnded={onVideoEnded}
+            practice={renderPractice}
           />
         ) : kitPick ? (
           <section className="grid place-items-center px-4" style={{ minHeight: "60dvh" }}>

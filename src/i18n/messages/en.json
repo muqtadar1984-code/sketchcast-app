@@ -2114,6 +2114,36 @@
         "worksheetFailed": "I couldn't open the worksheet just now. You can still ask me anything.",
         "done": "That's the whole lesson. Well done! Ask me about anything you're not sure of.",
         "empty": "This lesson has nothing to show yet. You can still ask me a question."
+      },
+      "practice": {
+        "answerLabel": "Your answer",
+        "placeholder": "Type your answer",
+        "check": "Check",
+        "checking": "Checking…",
+        "help": "I need help",
+        "choose": "Choose…",
+        "correct": "Correct! Well done.",
+        "incorrect": "Not quite. Have another go.",
+        "shown": "Here's the answer. Read it, then try typing it in.",
+        "review": "Sent to your teacher to mark.",
+        "failed": "I couldn't check that just now. Try again.",
+        "slowDown": "Just a moment — that answer is still being checked.",
+        "next": "Next question",
+        "score": "Your score: {correct}/{total}",
+        "hintOne": "1 hint",
+        "hintMany": "{n} hints",
+        "wellDone": "Well done! You finished the worksheet. Ask me about anything you'd like to go over.",
+        "keepGoing": "Good effort! Let's keep practising. Ask me about any question you found hard.",
+        "rung": {
+          "hint": "Hint",
+          "step": "Worked step",
+          "answer": "Answer"
+        },
+        "generic": {
+          "hint": "Read the question again slowly and look for the key words.",
+          "step": "Break it into small steps. What do you know already, and what is the question asking for?",
+          "answer": "Compare this answer with yours and see where they differ."
+        }
       }
     }
   },

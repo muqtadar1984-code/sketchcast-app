@@ -2114,6 +2114,36 @@
         "worksheetFailed": "Saya tidak dapat membuka lembaran kerja sekarang. Anda masih boleh tanya saya apa sahaja.",
         "done": "Itu sahaja pelajaran ini. Syabas! Tanya saya tentang apa-apa yang anda kurang pasti.",
         "empty": "Pelajaran ini belum ada apa-apa untuk ditunjukkan. Anda masih boleh bertanya kepada saya."
+      },
+      "practice": {
+        "answerLabel": "Jawapan anda",
+        "placeholder": "Taip jawapan anda",
+        "check": "Semak",
+        "checking": "Sedang menyemak…",
+        "help": "Saya perlukan bantuan",
+        "choose": "Pilih…",
+        "correct": "Betul! Bagus sekali.",
+        "incorrect": "Belum tepat lagi. Cuba sekali lagi.",
+        "shown": "Ini jawapannya. Baca, kemudian cuba taip.",
+        "review": "Dihantar kepada guru anda untuk ditanda.",
+        "failed": "Saya tidak dapat menyemaknya sekarang. Cuba lagi.",
+        "slowDown": "Sebentar — jawapan itu masih sedang disemak.",
+        "next": "Soalan seterusnya",
+        "score": "Markah anda: {correct}/{total}",
+        "hintOne": "1 petunjuk",
+        "hintMany": "{n} petunjuk",
+        "wellDone": "Bagus sekali! Anda telah menyiapkan lembaran kerja. Tanya saya apa-apa yang anda mahu ulang kaji.",
+        "keepGoing": "Usaha yang bagus! Mari kita teruskan berlatih. Tanya saya tentang soalan yang anda rasakan sukar.",
+        "rung": {
+          "hint": "Petunjuk",
+          "step": "Langkah berjawapan",
+          "answer": "Jawapan"
+        },
+        "generic": {
+          "hint": "Baca soalan sekali lagi perlahan-lahan dan cari kata kunci.",
+          "step": "Pecahkannya kepada langkah-langkah kecil. Apa yang anda sudah tahu, dan apa yang ditanya oleh soalan?",
+          "answer": "Bandingkan jawapan ini dengan jawapan anda dan lihat di mana bezanya."
+        }
       }
     }
   },

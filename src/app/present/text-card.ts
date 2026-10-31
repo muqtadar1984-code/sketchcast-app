@@ -124,6 +124,8 @@ export function learnerQuestionCards(raw: unknown, generationId: string): { card
       total: usable.length,
     };
     if (typeof q.marks === "number" && q.marks > 0) card.marks = q.marks;
+    // Which answer box the practice panel gives her (phase 2) — the type is not a key.
+    if (typeof q.type === "string" && (PRACTICE_QTYPES as readonly string[]).includes(q.type)) card.qtype = q.type as NonNullable<TextCard["qtype"]>;
     if (q.type === "mcq" && Array.isArray(q.options)) card.options = q.options.map(str);
     if (q.type === "match") {
       const left = Array.isArray(q.left) ? q.left.map(str) : [];
@@ -134,6 +136,8 @@ export function learnerQuestionCards(raw: unknown, generationId: string): { card
   });
   return { cards, answers: new Map() };
 }
+
+const PRACTICE_QTYPES = ["fill_blank", "short", "true_false", "match", "mcq", "subjective"] as const;
 
 export const answerKey = (generationId: string | undefined, questionId: string | undefined) =>
   `${generationId ?? ""}:${questionId ?? ""}`;

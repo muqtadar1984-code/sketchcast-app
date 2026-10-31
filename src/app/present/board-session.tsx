@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type ReactNode, type Ref } from "react";
 import { createClient } from "@/utils/supabase/client";
-import { newRoll, type PageBackground, type Stroke, type Tool } from "@/board/model";
+import { newRoll, type PageBackground, type Stroke, type TextCard, type Tool } from "@/board/model";
 import { CHIP_MS, chipPosition, createDeckMapCache, pagePayloadOf, payloadOf, selectionFromStroke, strokePointsBox, type DeckMapReply, type SkSelectionPayload } from "./highlight-select";
 import type { Rect } from "@/board/render";
 import { RollView, type RollHandle } from "@/board/roll";
@@ -247,6 +247,10 @@ type Props = {
   banner?: ReactNode;
   /** Told when the lesson video plays to its end (learner mode: SK moves on). */
   onVideoEnded?: () => void;
+  /** Worksheet practice (learner mode, phase 2): drawn under the roll on a
+   *  question page — her answer box, the help ladder, the score. `cards` are
+   *  the question pages on the roll. */
+  practice?: (o: { card: TextCard; cards: readonly TextCard[] }) => ReactNode;
 };
 
 /** The deck-pages GET, for the text map's signed URL. */
@@ -266,7 +270,7 @@ function boardUnitOf(u: KitUnit | null): BoardUnit | null {
   return u ? { generationId: u.video?.id ?? null, part: u.part, title: u.video?.title ?? null } : null;
 }
 
-export default function BoardSession({ session, kit, t, onEnd, io: ioProp, controllerRef, skSink, onUnit, railOpen = false, onRail, onLoadSlides, slideStatus = null, onLoadDeck, onHighlight, onAskSelection, learner = false, banner = null, onVideoEnded }: Props) {
+export default function BoardSession({ session, kit, t, onEnd, io: ioProp, controllerRef, skSink, onUnit, railOpen = false, onRail, onLoadSlides, slideStatus = null, onLoadDeck, onHighlight, onAskSelection, learner = false, banner = null, onVideoEnded, practice }: Props) {
   const roll = useMemo(() => newRoll(session.id), [session.id]);
   const profile = useMemo(() => profileFor(probeStatic(), newObservations()), []);
   const board = useRef<RollHandle | null>(null);
@@ -824,6 +828,10 @@ export default function BoardSession({ session, kit, t, onEnd, io: ioProp, contr
     return bg?.kind === "card" && bg.card.source === "question" ? bg.card : null;
   })();
   const currentKey = currentCard ? answerKey(currentCard.generationId, currentCard.questionId) : null;
+  /** Every question page on the roll (learner practice: the score covers the set). */
+  const rollQuestions: TextCard[] = practice
+    ? roll.pages.flatMap((p) => (p.background.kind === "card" && p.background.card.source === "question" ? [p.background.card] : []))
+    : [];
   const toggleAnswer = useCallback(() => {
     if (!currentKey) return;
     const next = new Set(revealedRef.current);
@@ -1233,6 +1241,7 @@ export default function BoardSession({ session, kit, t, onEnd, io: ioProp, contr
           </button>
         )}
         </div>
+        {learner && practice && currentCard && practice({ card: currentCard, cards: rollQuestions })}
         {note && <p className="font-mono text-[11px] text-[#4FD6C2]">{note}</p>}
         {slideStatus && (
           <p role="status" className="font-mono text-[11px] text-[#4FD6C2]" data-board="slide-status">

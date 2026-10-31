@@ -2114,6 +2114,36 @@
         "worksheetFailed": "Je n'ai pas pu ouvrir la fiche pour l'instant. Tu peux quand même me poser tes questions.",
         "done": "C'est toute la leçon. Bravo ! Pose-moi une question sur ce qui n'est pas clair.",
         "empty": "Cette leçon n'a encore rien à montrer. Tu peux quand même me poser une question."
+      },
+      "practice": {
+        "answerLabel": "Ta réponse",
+        "placeholder": "Écris ta réponse",
+        "check": "Vérifier",
+        "checking": "Vérification…",
+        "help": "J'ai besoin d'aide",
+        "choose": "Choisis…",
+        "correct": "Correct ! Bravo.",
+        "incorrect": "Pas tout à fait. Essaie encore.",
+        "shown": "Voici la réponse. Lis-la, puis essaie de l'écrire.",
+        "review": "Envoyée à ton enseignant pour correction.",
+        "failed": "Je n'ai pas pu vérifier pour l'instant. Réessaie.",
+        "slowDown": "Un instant : cette réponse est encore en cours de vérification.",
+        "next": "Question suivante",
+        "score": "Ton score : {correct}/{total}",
+        "hintOne": "1 indice",
+        "hintMany": "{n} indices",
+        "wellDone": "Bravo ! Tu as terminé la fiche d'exercices. Pose-moi des questions sur ce que tu veux revoir.",
+        "keepGoing": "Bel effort ! Continuons à nous entraîner. Pose-moi des questions sur celles qui t'ont paru difficiles.",
+        "rung": {
+          "hint": "Indice",
+          "step": "Étape résolue",
+          "answer": "Réponse"
+        },
+        "generic": {
+          "hint": "Relis lentement la question et cherche les mots importants.",
+          "step": "Découpe-la en petites étapes. Que sais-tu déjà, et que demande la question ?",
+          "answer": "Compare cette réponse avec la tienne et regarde où elles diffèrent."
+        }
       }
     }
   },

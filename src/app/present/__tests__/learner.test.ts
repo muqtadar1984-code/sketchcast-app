@@ -8,7 +8,7 @@
  * Run: node node_modules/vitest/vitest.mjs run src/app/present/__tests__/learner.test.ts
  */
 import { describe, expect, it } from "vitest";
-import { learnerAllowed, learnerKitFor, learnerKits, learnerKitKey, learnerUnits, LEARNER_EXCLUDED_KINDS, type LearnerGen, type LearnerShare } from "@/utils/present/learner";
+import { learnerAllowed, learnerKitFor, learnerKits, learnerKitKey, learnerUnits, learnerWorksheetIn, LEARNER_EXCLUDED_KINDS, type LearnerGen, type LearnerShare } from "@/utils/present/learner";
 import { learnHref, learnLinks } from "@/utils/present/learner-links";
 import { parsePresentDeepLink, deepLinkStartable } from "../deep-link";
 import { firstStep, nextLine, nextStep, openingLine, type CoachLines } from "../learner-coach";
@@ -79,13 +79,37 @@ describe("learnerKits — her assigned kits only", () => {
     expect(kits).toEqual([]);
   });
 
-  it("orders newest due first, then the undated kits by their newest share", () => {
+  it("orders OVERDUE first, then the soonest due, then the undated kits by their newest share (phase 2)", () => {
+    const now = Date.parse("2026-11-05T00:00:00Z");
+    const v = (id: string, title: string) => gen({ id, kind: "presentation", title: `${title} · ${title}`, artifacts: [A("video_mp4")] });
     const kits = learnerKits(
-      [p1v, cv, gen({ id: "x", kind: "presentation", title: "Atoms · Atoms", artifacts: [A("video_mp4")] })],
-      [share("p1v", "2026-11-01T09:00:00Z"), share("cv", "2026-11-10T09:00:00Z"), share("x", null, "2026-10-30T00:00:00Z")],
+      [p1v, cv, v("x", "Atoms"), v("y", "Forces"), v("z", "Light"), v("w", "Sound")],
+      [
+        share("p1v", "2026-11-01T09:00:00Z"), // overdue by 4 days
+        share("cv", "2026-11-10T09:00:00Z"), // due later
+        share("x", null, "2026-10-30T00:00:00Z"), // undated, older share
+        share("y", "2026-11-04T09:00:00Z"), // overdue by 1 day
+        share("z", "2026-11-06T09:00:00Z"), // due soonest
+        share("w", null, "2026-10-31T00:00:00Z"), // undated, newer share
+      ],
+      now,
     );
-    expect(kits.map((k) => k.id)).toEqual(["cv", "p1v", "x"]);
-    expect(kits[0].due).toBe("2026-11-10T09:00:00Z");
+    expect(kits.map((k) => k.id)).toEqual(["p1v", "y", "z", "cv", "w", "x"]);
+    expect(kits[0].due).toBe("2026-11-01T09:00:00Z");
+  });
+
+  it("with nothing overdue the soonest due date leads", () => {
+    const kits = learnerKits([p1v, cv], [share("p1v", "2026-11-01T09:00:00Z"), share("cv", "2026-11-10T09:00:00Z")], Date.parse("2026-10-01T00:00:00Z"));
+    expect(kits.map((k) => k.id)).toEqual(["p1v", "cv"]);
+  });
+
+  it("learnerWorksheetIn: only a projected worksheet of HER kit", () => {
+    const kits = learnerKits([p1v, p1w, plan, exam], [share("p1v"), share("p1w"), share("plan"), share("exam")]);
+    expect(learnerWorksheetIn(kits[0], "p1w")).toBe(true);
+    expect(learnerWorksheetIn(kits[0], "p1v")).toBe(false);
+    expect(learnerWorksheetIn(kits[0], "exam")).toBe(false);
+    expect(learnerWorksheetIn(kits[0], "plan")).toBe(false);
+    expect(learnerWorksheetIn(kits[0], "elsewhere")).toBe(false);
   });
 
   it("a piece shared twice keeps its EARLIEST due date", () => {

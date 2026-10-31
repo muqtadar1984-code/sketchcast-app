@@ -98,10 +98,12 @@ const time = (iso: string | null | undefined): number => {
 
 /**
  * Her assigned kits. `gens` is what her session can read; only those one of
- * `shares` names are used. Ordered NEWEST DUE FIRST (the latest due date at the
- * top, the plan's wording), then the undated ones, newest share first.
+ * `shares` names are used. Ordered for what she should do next (phase 2,
+ * 2026-10-31): the OVERDUE kits first (the longest overdue at the top), then
+ * the rest by due date, SOONEST first, then the undated ones, newest share
+ * first. `now` decides what is overdue.
  */
-export function learnerKits(gens: LearnerGen[], shares: LearnerShare[]): LearnerKit[] {
+export function learnerKits(gens: LearnerGen[], shares: LearnerShare[], now: number = Date.now()): LearnerKit[] {
   const dueOf = new Map<string, string | null>();
   const sharedOf = new Map<string, string | null>();
   for (const s of shares) {
@@ -146,12 +148,28 @@ export function learnerKits(gens: LearnerGen[], shares: LearnerShare[]): Learner
       units,
     });
   }
+  const overdue = (k: LearnerKit) => !!k.due && time(k.due) < now;
   return out.sort((a, b) => {
-    if (a.due && b.due) return time(b.due) - time(a.due);
+    if (a.due && b.due) {
+      const oa = overdue(a);
+      const ob = overdue(b);
+      if (oa !== ob) return oa ? -1 : 1;
+      return time(a.due) - time(b.due) || a.key.localeCompare(b.key);
+    }
     if (a.due) return -1;
     if (b.due) return 1;
     return (time(b.sharedAt) || 0) - (time(a.sharedAt) || 0) || a.key.localeCompare(b.key);
   });
+}
+
+/**
+ * Is `generationId` a worksheet of this kit that the student Board PROJECTS
+ * (one with questions to practise — never a test paper, a plan, a bank or an
+ * answer key; learnerUnits has already dropped those)? The practice route's
+ * ownership check (phase 2).
+ */
+export function learnerWorksheetIn(kit: LearnerKit, generationId: string): boolean {
+  return kit.units.some((u) => u.docs.some((d) => d.id === generationId && d.projects && d.kind === "worksheet"));
 }
 
 /** The kit a deep link names: its id, or any of its pieces. */

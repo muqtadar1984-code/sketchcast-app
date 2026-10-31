@@ -2114,6 +2114,36 @@
         "worksheetFailed": "No pude abrir la hoja ahora mismo. Aun así, puedes preguntarme lo que quieras.",
         "done": "Esa es toda la lección. ¡Muy bien! Pregúntame lo que no tengas claro.",
         "empty": "Esta lección aún no tiene nada que mostrar. Aun así, puedes hacerme una pregunta."
+      },
+      "practice": {
+        "answerLabel": "Tu respuesta",
+        "placeholder": "Escribe tu respuesta",
+        "check": "Comprobar",
+        "checking": "Comprobando…",
+        "help": "Necesito ayuda",
+        "choose": "Elige…",
+        "correct": "¡Correcto! Muy bien.",
+        "incorrect": "No del todo. Inténtalo otra vez.",
+        "shown": "Esta es la respuesta. Léela y luego intenta escribirla.",
+        "review": "Enviada a tu profesor para que la corrija.",
+        "failed": "No he podido comprobarla ahora. Inténtalo de nuevo.",
+        "slowDown": "Un momento: todavía se está comprobando esa respuesta.",
+        "next": "Siguiente pregunta",
+        "score": "Tu puntuación: {correct}/{total}",
+        "hintOne": "1 pista",
+        "hintMany": "{n} pistas",
+        "wellDone": "¡Muy bien! Has terminado la hoja de ejercicios. Pregúntame lo que quieras repasar.",
+        "keepGoing": "¡Buen esfuerzo! Sigamos practicando. Pregúntame por cualquier pregunta que te haya costado.",
+        "rung": {
+          "hint": "Pista",
+          "step": "Paso resuelto",
+          "answer": "Respuesta"
+        },
+        "generic": {
+          "hint": "Vuelve a leer la pregunta despacio y busca las palabras clave.",
+          "step": "Divídelo en pasos pequeños. ¿Qué sabes ya y qué te pide la pregunta?",
+          "answer": "Compara esta respuesta con la tuya y mira en qué se diferencian."
+        }
       }
     }
   },
