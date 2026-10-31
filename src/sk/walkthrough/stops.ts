@@ -475,12 +475,11 @@ const STUDENT: WalkStopDef[] = [
       { id: "learnAsk", anchors: [BOARD_SK, HERO, LAUNCHER] },
       { id: "learnPractice", anchors: [LEARN_PRACTICE, LEARN_WORKSHEET, LEARN_STEPS] },
     ],
+    // Phase 4: her mastery per idea shows only after a worksheet, so the tour
+    // offers SK's "How am I doing?" chip here instead of a stop on a card
+    // that is not on screen yet.
+    chips: ["howAmIDoing"],
   },
-  // TODO(phase 4, SK student Board plan): mastery per concept ("how am I
-  // doing?") and the plan her teacher (or parent) approves. No anchor exists
-  // on this branch yet; once the mastery card renders, add the stop with its
-  // line in all ten files (sk.walkthrough.student.mastery), e.g.:
-  // { id: "mastery", route: "{learnPath}", anchors: ['[data-tour="learn-mastery"]'], needs: ["learn"], chips: ["howAmIDoing"] },
   { id: "myBooks", route: "/dashboard", anchors: ['[data-tour="my-books"]', { sel: HERO, line: "myBooksNone" }], demo: "bookActivate" },
   { id: "diaryTimetable", route: "/dashboard", anchors: ['[data-tour="diary-nav"]', '[data-tour="timetable-nav"]', MOBILE_NAV], needs: ["diary"] },
   // Near the end, while the tour is still on /dashboard (the widget's page).
