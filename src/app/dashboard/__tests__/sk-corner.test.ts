@@ -72,7 +72,7 @@ describe("the layout's gate is unchanged (sk-home.tsx)", () => {
     const src = read("layout.tsx");
     expect(src).toContain("<SkHomeProvider on={skOn}>");
     expect(src).toContain("skOn = await skShellEnabledFor(supabase, user, role, schoolId);");
-    expect(src).toContain("{skOn && <SkLauncher copy={t.sk.shell} walkCopy={t.sk.walkthrough} role={role} hat={hat} introDue={skIntroDue} />}");
+    expect(src).toContain("{skOn && <SkLauncher copy={t.sk.shell} walkCopy={t.sk.walkthrough} role={role} hat={hat} introDue={skIntroDue || skReplay} replay={skReplay} />}");
   });
 });
 

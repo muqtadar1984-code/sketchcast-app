@@ -2164,6 +2164,14 @@
         "chapter": "cap. {n}",
         "from": "Fuente: {source}"
       },
+      "gap": {
+        "thumb": "Esto no me ayudó",
+        "ask": "¿Qué querías?",
+        "placeholder": "Opcional: unas pocas palabras",
+        "send": "Enviar",
+        "thanks": "Gracias: esto nos ayuda a mejorar SK.",
+        "failed": "No se pudo enviar. Inténtalo de nuevo."
+      },
       "open": "Pregúntale a SK",
       "close": "Cerrar SK",
       "title": "SK, tu compañero de SketchCast",

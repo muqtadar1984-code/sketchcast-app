@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
@@ -9,6 +9,8 @@ import { openMemory, sealMemory } from "@/sk/shell/memory";
 import { auditSinkFor } from "@/sk/shell/audit";
 import { ACT_LINES, executeAction } from "@/sk/shell/act";
 import type { SkActRequest, SkActResponse, SkCollector } from "@/sk/shell/types";
+// 2026-10-31: the SK gap tracker — a refused action is a miss (signal B).
+import { recordGaps } from "@/sk/gaps/store";
 
 export const runtime = "nodejs";
 
@@ -118,6 +120,30 @@ export async function POST(request: Request) {
     session: g.supabase,
     sink: auditSinkFor(admin),
   });
+  if (out.response.outcome === "refused") {
+    // Gap tracker: a refused action (voice on a click-only card, not allowed
+    // in this view, the database said no). Written after the reply.
+    const db = admin;
+    const gap = {
+      turnId: body.turnId,
+      userId: g.user.id,
+      role: ctx.user.role,
+      locale: ctx.user.locale,
+      page: body.collector.path,
+      modality: body.via === "voice" ? "voice" : "text",
+      signal: "refusal" as const,
+      reply: out.response.summary,
+      route: "act",
+      tools: out.action ? [out.action] : [],
+      context: { items: [{ kind: "act_refused", action: out.action ?? null, via: body.via, reason: typeof out.response.result?.reason === "string" ? out.response.result.reason : null }] },
+    };
+    const task = () => recordGaps(db, [gap]);
+    try {
+      after(task);
+    } catch {
+      void task();
+    }
+  }
   const response: SkActResponse = { ...out.response, memory: sealMemory(out.memory) };
   return NextResponse.json(response);
 }
