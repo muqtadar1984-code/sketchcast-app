@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { after } from "next/server";
+import { headers } from "next/headers";
 import { createClient, currentUser } from "@/utils/supabase/server";
 import { onboardingEnabled, skShellEnabledFor } from "@/utils/flags";
 import { claimLsPurchases } from "@/utils/lemonsqueezy/claim";
@@ -13,7 +14,8 @@ import TourProvider from "@/tour/TourProvider";
 import { tourForRole } from "@/tour/definitions";
 import { shouldAutoStart } from "@/tour/logic";
 import type { TourSeen } from "@/tour/types";
-import { SK_INTRO_TOUR } from "@/sk/shell/tour";
+import { SK_INTRO_TOUR, isHardReload } from "@/sk/shell/tour";
+import { skDebugFor } from "@/sk/shell/routing";
 import { getDictionary } from "@/i18n/dictionaries";
 import { resolveLocale } from "@/i18n/resolve";
 
@@ -43,6 +45,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // current SK_INTRO_TOUR.version (same shouldAutoStart rule as the tours).
   let skOn = false;
   let skIntroDue = false;
+  // A tester's hard refresh (SK_DEBUG_EMAILS + Ctrl+Shift+R) replays the
+  // first-login walkthrough from stop 1 (src/sk/shell/tour.ts isHardReload).
+  let skReplay = false;
   let hat: string | null = null;
   if (user) {
     const { data: profile } = await supabase
@@ -187,6 +192,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       hat = await activeHatCookie();
       const skSeen: TourSeen | null = seenFor(progRows, SK_INTRO_TOUR.key);
       skIntroDue = shouldAutoStart(skSeen, SK_INTRO_TOUR.version);
+      skReplay = skDebugFor(user.email) && isHardReload(await headers());
     }
   }
 
@@ -213,7 +219,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         )}
         {/* SK Shell (S0): the portal-wide companion, in the same corner — so the
             Assistant above is handed `hidden` whenever this one renders. */}
-        {skOn && <SkLauncher copy={t.sk.shell} walkCopy={t.sk.walkthrough} role={role} hat={hat} introDue={skIntroDue} />}
+        {skOn && <SkLauncher copy={t.sk.shell} walkCopy={t.sk.walkthrough} role={role} hat={hat} introDue={skIntroDue || skReplay} replay={skReplay} />}
       </SkHomeProvider>
     </TourProvider>
   );

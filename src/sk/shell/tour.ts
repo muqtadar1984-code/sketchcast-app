@@ -20,3 +20,20 @@
 // src/__tests__/server-client-boundary.test.ts).
 
 export const SK_INTRO_TOUR = { key: "sk-intro", version: 2 } as const;
+
+// The tester replay (founder 2026-10-31): for SK_DEBUG_EMAILS only, a HARD
+// refresh (Ctrl+Shift+R) of a dashboard page plays the first-login walkthrough
+// again, exactly as a new user gets it. The browser says which reload it was in
+// the document request's headers: a hard reload asks the cache to revalidate
+// everything (`Cache-Control: no-cache` / `Pragma: no-cache`), a normal F5
+// sends `max-age=0`. Only a top-level page load counts (`Sec-Fetch-Mode:
+// navigate`), never the app's own in-page (RSC) fetches. DevTools' "Disable
+// cache" makes every reload look hard — fine for a tester.
+type HeaderGet = { get(name: string): string | null };
+
+export function isHardReload(h: HeaderGet): boolean {
+  if ((h.get("sec-fetch-mode") ?? "").toLowerCase() !== "navigate") return false;
+  if (h.get("rsc") != null || h.get("next-router-state-tree") != null) return false;
+  const noCache = (v: string | null) => /(^|,)\s*no-cache\s*(,|$)/i.test(v ?? "");
+  return noCache(h.get("cache-control")) || noCache(h.get("pragma"));
+}
