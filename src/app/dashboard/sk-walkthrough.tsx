@@ -730,6 +730,19 @@ export function useSkWalkthrough({
       viaRef.current = opts?.via ?? "menu";
       logRef.current?.push(walkEvent({ via: viaRef.current, why: "asked", error: `run:${walkRef.current?.status ?? "none"}` }));
       if (!starterRef.current) logRef.current?.push(walkEvent({ via: viaRef.current, why: "failed", error: "no starter" }));
+      // Asked out loud: SK has just SPOKEN its reply, so the tour speaks too —
+      // she never taps, so "Tap for sound" would leave a voice user with a
+      // silent tour. A browser that still refuses goes back to "Tap for sound"
+      // (soundBlocked).
+      if (opts?.via === "turn-voice" && !soundRef.current) {
+        soundRef.current = true;
+        setSoundOn(true);
+        try {
+          window.sessionStorage.setItem(SOUND_KEY, "on");
+        } catch {
+          /* private mode */
+        }
+      }
       starterRef.current?.start({ record });
       dropRetry();
       const seq = readySeqRef.current;

@@ -210,6 +210,15 @@ describe("the launcher's wiring (source pins)", () => {
     // "turn-voice", a typed one as "turn-text" (sk-shell's walkthrough event).
     expect(code(read("sk-shell.tsx"))).toContain('onTakeTourRef.current?.(modality === "voice" ? "turn-voice" : "turn-text")');
   });
+  it("a tour asked for OUT LOUD speaks at once — no 'Tap for sound' for a voice user (2026-10-31)", () => {
+    const hook = code(read("sk-walkthrough.tsx"));
+    // SK has just spoken its reply, so the tour's voice is unlocked (and kept
+    // for the tab); a browser that still refuses falls back via soundBlocked.
+    expect(hook).toMatch(/if \(opts\?\.via === "turn-voice" && !soundRef\.current\) \{\s*soundRef\.current = true;\s*setSoundOn\(true\);/);
+    expect(hook).toContain("window.sessionStorage.setItem(SOUND_KEY, \"on\");");
+    // Typed and button starts keep the autoplay rule (her tap unlocks the voice).
+    expect(hook).not.toMatch(/via === "turn-text" && !soundRef/);
+  });
   it("a question mid-tour pauses it; SK answers through the normal turn", () => {
     expect(src).toContain("onEngaged={tour.onQuestion}");
     expect(read("sk-shell.tsx")).toMatch(/if \(walkRef\.current\?\.command\(q\)\) \{/);
