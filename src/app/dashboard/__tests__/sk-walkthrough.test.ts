@@ -201,17 +201,21 @@ describe("the launcher's wiring (source pins)", () => {
   });
   it("auto-starts only from a home page, only while the intro is due, and records only that run", () => {
     expect(src).toMatch(/if \(!SK_ON \|\| autoTried \|\| !introPending \|\| !home \|\| tourActive\) return;/);
-    expect(src).toContain("if (!carried) start({ record: true });");
-    // Replays (the 🧭, the menu, "Show me around") start without record.
-    expect(src).toContain("useEffect(() => onSkWalkthroughRequest(() => start()), [start]);");
-    expect(src).toContain("onTakeTour={() => start()}");
+    expect(src).toContain('if (!carried) start({ record: true, via: "auto" });');
+    // Replays (the 🧭, the menu, "Show me around") start without record —
+    // each saying who asked (2026-10-31, the voice log's "walk" events).
+    expect(src).toContain('useEffect(() => onSkWalkthroughRequest(() => start({ via: "bus" })), [start]);');
+    expect(src).toContain("onTakeTour={(via) => start({ via })}");
+    // A spoken "show me around" the server answered with start_tour starts as
+    // "turn-voice", a typed one as "turn-text" (sk-shell's walkthrough event).
+    expect(code(read("sk-shell.tsx"))).toContain('onTakeTourRef.current?.(modality === "voice" ? "turn-voice" : "turn-text")');
   });
   it("a question mid-tour pauses it; SK answers through the normal turn", () => {
     expect(src).toContain("onEngaged={tour.onQuestion}");
     expect(read("sk-shell.tsx")).toMatch(/if \(walkRef\.current\?\.command\(q\)\) \{/);
   });
   it("'continue the tour' with no tour running starts one, with no turn (founder 2026-10-30)", () => {
-    expect(code(read("sk-shell.tsx"))).toMatch(/if \(!walkRef\.current && onTakeTourRef\.current && walkStartCommand\(q\)\) \{\s*setInput\(""\);\s*onTakeTourRef\.current\(\);\s*return;/);
+    expect(code(read("sk-shell.tsx"))).toMatch(/if \(!walkRef\.current && onTakeTourRef\.current && walkStartCommand\(q\)\) \{\s*setInput\(""\);\s*onTakeTourRef\.current\("phrase"\);\s*return;/);
   });
   it("the /present launcher carries the tour's words (a run resumes there); /sk has no launcher any more (SK Tutor retired 2026-10-31)", () => {
     expect(readSrc("app/present/present-client.tsx")).toContain("walkCopy={sk.walkCopy}");

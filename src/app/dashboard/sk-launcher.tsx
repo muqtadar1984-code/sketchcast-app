@@ -91,7 +91,7 @@ export default function SkLauncher({
   // "Take the tour": the header's 🧭 (TourProvider, for SK users), SK's menu
   // and "Show me around" reach the ONE runner here. A replay never records.
   const { start, active: tourActive } = tour;
-  useEffect(() => onSkWalkthroughRequest(() => start()), [start]);
+  useEffect(() => onSkWalkthroughRequest(() => start({ via: "bus" })), [start]);
 
   // First login (founder decision 2): it starts by itself, from a home page.
   const [autoTried, setAutoTried] = useState(false);
@@ -108,7 +108,7 @@ export default function SkLauncher({
       } catch {
         carried = false;
       }
-      if (!carried) start({ record: true });
+      if (!carried) start({ record: true, via: "auto" });
     }, 700);
     return () => window.clearTimeout(t);
   }, [autoTried, introPending, home, tourActive, start]);
@@ -157,7 +157,7 @@ export default function SkLauncher({
               }
             : null
         }
-        onTakeTour={() => start()}
+        onTakeTour={(via) => start({ via })}
         takeTourLabel={walkCopy.ui.takeTour}
       />
       {tour.spotlight}

@@ -6,7 +6,7 @@
  * Run: node node_modules/vitest/vitest.mjs run src/sk/shell/client/__tests__/voice-log.test.ts
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanVoiceEvents, createVoiceLog, type VoiceEvent } from "../voice-log";
+import { cleanVoiceEvents, createVoiceLog, tourEvent, walkEvent, type VoiceEvent } from "../voice-log";
 import { createSpeechCoordinator } from "../speech";
 import { EMPTY_MARKS, type SpeechProvider, type SpeechResult } from "@/sk/speech/provider";
 import { BrowserSpeechProvider } from "@/sk/speech/browser";
@@ -42,6 +42,31 @@ describe("cleanVoiceEvents — the server's view of a client batch", () => {
     expect(out[0]).toEqual({ k: "sentence", t: 13, provider: "polly-client", ok: false, error: "x".repeat(60), ms: 830 });
     expect(out.length).toBe(37); // only the first 40 raw entries are looked at; null, 5 and {t:1} are dropped
     expect(cleanVoiceEvents("nope")).toEqual([]);
+  });
+});
+
+// 2026-10-31: the tour's start, step by step (founder: a spoken "show me
+// around" left nothing in the logs after the server's start).
+describe("walkEvent — one step of a tour start", () => {
+  it("who asked, what happened, how long; survives the server's cleaning", () => {
+    const asked = walkEvent({ via: "turn-voice", why: "asked", error: "run:paused" });
+    expect(asked).toEqual({ k: "walk", provider: "turn-voice", why: "asked", ok: true, error: "run:paused" });
+    const ready = walkEvent({ via: "turn-voice", why: "ready", ms: 812.4, stops: 18 });
+    expect(ready).toEqual({ k: "walk", provider: "turn-voice", why: "ready", ok: true, error: "stops=18", ms: 812 });
+    const failed = walkEvent({ via: "retry", why: "failed", error: "x".repeat(200) });
+    expect(failed.ok).toBe(false);
+    expect(failed.error).toHaveLength(60);
+    expect(cleanVoiceEvents([{ ...ready, t: 5 }])).toEqual([{ ...ready, t: 5 }]);
+  });
+  it("a stop cut off before it decided is an 'abandoned' tour event", () => {
+    expect(tourEvent({ stop: "hello", route: "/dashboard", outcome: "abandoned", ms: 3000, page: "cut-off" })).toEqual({
+      k: "tour",
+      provider: "hello",
+      ok: false,
+      why: "abandoned",
+      error: "/dashboard cut-off",
+      ms: 3000,
+    });
   });
 });
 
