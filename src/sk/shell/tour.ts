@@ -12,6 +12,11 @@
 //   (sk-walkthrough.tsx) — per-role stops, page by page, highlighted, from the
 //   home hero. Bumped so everyone who heard v1 (the founder, Sara, her student)
 //   gets it once. Replays ("Show me around", "Take the tour") never write it.
+// v3 (2026-10-31, SK student Board plan): the student tour covers the student
+//   Board ("Learn with SK", then her first assigned kit on her own Board: the
+//   step strip, ask / highlight, worksheet practice and SK teaching in the
+//   chat); the teacher's Assign and the parent's child card say it in one
+//   clause. Bumped so every user hears the new tour once.
 //
 // SERVER-SAFE on purpose (no "use client", no DOM): the dashboard layout reads
 // the seen row by `key` and compares against `version` on the server, and the
@@ -19,7 +24,7 @@
 // A constant a server layout needs can never live in a client module (see
 // src/__tests__/server-client-boundary.test.ts).
 
-export const SK_INTRO_TOUR = { key: "sk-intro", version: 2 } as const;
+export const SK_INTRO_TOUR = { key: "sk-intro", version: 3 } as const;
 
 // The tester replay (founder 2026-10-31): for SK_DEBUG_EMAILS only, a HARD
 // refresh (Ctrl+Shift+R) of a dashboard page plays the first-login walkthrough

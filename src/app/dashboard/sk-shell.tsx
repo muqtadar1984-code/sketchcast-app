@@ -1678,14 +1678,17 @@ export default function SkShell({
   }, [greet, greeting, tourOn]);
 
   // SK leads on the student Board: each new line once, after the warm start
-  // (which sets the conversation and would otherwise replace it).
+  // (which sets the conversation and would otherwise replace it). While the
+  // tour narrates on her Board (its learnBoard stop, 2026-10-31) the line
+  // waits: spoken over the tour it would cut the tour's line off (which
+  // holds the tour); it is said once the tour is over (or skipped).
   const leadKeyRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!lead?.text || ready === null || leadKeyRef.current === lead.key) return;
+    if (!lead?.text || ready === null || tourOn || leadKeyRef.current === lead.key) return;
     leadKeyRef.current = lead.key;
     appendSk(lead.text);
     speakLine(lead.text);
-  }, [lead, ready, appendSk, speakLine]);
+  }, [lead, ready, tourOn, appendSk, speakLine]);
 
   // ── Phase 3 (student Board, 2026-10-31): SK teaches by itself ───────────
   // While HER Board is open (a student with the Board bridge): a worksheet

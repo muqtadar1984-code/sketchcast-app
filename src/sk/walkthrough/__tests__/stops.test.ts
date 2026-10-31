@@ -198,6 +198,38 @@ describe("combined stops: every part's line ends a sentence, in all ten files", 
   });
 });
 
+// The student Board (SK student Board plan 2026-10-31): the tour points at
+// "Learn with SK" and at the learner Board's own controls, and the teacher /
+// parent tours say it in one clause each (no new stop).
+describe("the student Board in the tour", () => {
+  const read = (...p: string[]) => readFileSync(join(SRC, ...p), "utf8");
+  it("the anchors sit on the exact controls", () => {
+    expect(read("app", "dashboard", "student-dashboard.tsx")).toMatch(/data-learn-with-sk\s+data-tour="learn-with-sk"/);
+    const pc = read("app", "present", "present-client.tsx");
+    expect(pc).toContain('data-board="coach" data-tour="learn-steps"');
+    expect(pc).toContain('data-tour={x === "worksheet" ? "learn-step-worksheet" : undefined}');
+    expect(read("app", "present", "practice-panel.tsx")).toContain('data-board="practice" data-tour="learn-practice"');
+  });
+  it("the facts route gives the Board stop her first assigned kit, through \"Learn with SK\"'s own link", () => {
+    const route = read("app", "api", "sk", "walkthrough", "route.ts");
+    expect(route).toContain("const kits = await loadLearnerKits(supabase);");
+    expect(route).toContain("facts.learnPath = kits[0] ? learnHref(kits[0].id) : null;");
+  });
+  it("SK's own lead on her Board waits while the tour narrates (it would cut the tour's line off)", () => {
+    expect(read("app", "dashboard", "sk-shell.tsx")).toMatch(/if \(!lead\?\.text \|\| ready === null \|\| tourOn \|\| leadKeyRef\.current === lead\.key\) return;/);
+  });
+  it("teacher and parent: one clause each, in all ten files", () => {
+    expect(en.sk.walkthrough.teacher.assign).toMatch(/students then learn it with me on their own Board\.$/);
+    expect(en.sk.walkthrough.parent.childCard).toMatch(/they can learn it with me, and you'll see their progress\.$/);
+    // Translated, not copied from English.
+    for (const [code, file] of Object.entries(FILES)) {
+      if (code === "en") continue;
+      for (const [role, k] of [["teacher", "assign"], ["parent", "childCard"], ["student", "learnBoard"], ["student", "learnWithSk"]] as const)
+        expect((file.sk.walkthrough[role] as Record<string, string>)[k], `${code} ${role}.${k}`).not.toBe((en.sk.walkthrough[role] as Record<string, string>)[k]);
+    }
+  });
+});
+
 // The report stop's fact is the widget's own flag: where it renders, and the
 // facts route reporting it.
 describe("Report a problem: the stop follows the widget's flag", () => {
@@ -237,7 +269,7 @@ describe("combined stops: the precomposed line and its part markers, in all ten 
   const sentences = (t: string) => t.split(/(?<=[.!?؟।])\s+/).filter(Boolean);
   const combined = WALK_ROLES.flatMap((role) => WALK_STOPS[role].filter((s) => s.parts?.length).map((s) => ({ role, s })));
   it("there are combined stops to check", () => {
-    expect(combined.map(({ s }) => s.id)).toEqual(["openBook", "kit", "setup", "classBoard", "insights", "bellLanguage", "skHelp"]);
+    expect(combined.map(({ s }) => s.id)).toEqual(["openBook", "kit", "setup", "classBoard", "insights", "bellLanguage", "skHelp", "learnBoard"]);
   });
   it("each precomposed line: every later part's marker once, in order, nothing else; 1–2 sentences that end cleanly", () => {
     for (const { role, s } of combined) {
@@ -302,7 +334,7 @@ describe("the whole tour's spoken length", () => {
   const WORDS_PER_SEC = 2.6;
   const ALL: Record<string, WalkFacts> = {
     teacher: { books: true, bookId: "b1", classId: "c1", catalogue: true, exam: true, diary: true, timetable: true, calendar: true, board: true, reportIssue: true },
-    student: { diary: true, reportIssue: true },
+    student: { diary: true, reportIssue: true, learnPath: "/present?learn=g1&autostart=1" },
     parent: { children: 2, verifiedChildren: 2, schoolParent: true, diary: true, calendar: true, parentPortal: true, reportIssue: true },
     principal: { analytics: true, timetable: true, diary: true, notices: true, roleHats: true, reportIssue: true },
     coordinator: { timetable: true, diary: true, notices: true, reportIssue: true },
@@ -332,6 +364,8 @@ describe("the whole tour's spoken length", () => {
     if (process.env.TOUR_LENGTH_REPORT) writeFileSync(process.env.TOUR_LENGTH_REPORT, report.join("\n"));
     expect(estimate("teacher").sec.en).toBeLessThan(210);
     expect(estimate("teacher").stops).toBeLessThanOrEqual(22);
+    // The student's tour, with the student Board (2026-10-31), stays short.
+    expect(estimate("student").sec.en).toBeLessThanOrEqual(90);
   });
   it("one short sentence per stop: no single line over ~22 English words (a combined line ~45)", () => {
     const wholes = new Set(WALK_ROLES.flatMap((r) => WALK_STOPS[r].filter((s) => s.parts?.length).map((s) => `${r}.${s.line ?? s.id}`)));

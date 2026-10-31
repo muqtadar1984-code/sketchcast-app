@@ -9,7 +9,8 @@
 // walkthrough.ts) turns it into a plan, and node tests read both.
 //
 // Each stop says:
-//   route    — where it happens. `{classId}` / `{bookId}` are filled from
+//   route    — where it happens. `{classId}` / `{bookId}` / `{learnPath}`
+//              are filled from
 //              the user's facts; a missing value in a QUERY drops that
 //              parameter, a missing value in the PATH skips the stop.
 //   anchors  — what to highlight, in order: the first one visible on the page
@@ -61,6 +62,16 @@
 // (Ready-made kits + the SK Tutor tab) is the kits stop alone; the student's
 // five tutor stops (tutorNone, skBooks, kitPlayer, kitHelp, kitNext) are gone;
 // the parent's homeKits no longer points at the tab.
+//
+// 2026-10-31 (SK student Board plan, phases 1–3): the student tour covers
+// the student Board. After My lessons, `learnWithSk` points at the "Learn
+// with SK" button (or, with nothing assigned, says where it will be); then
+// ONE combined stop, `learnBoard`, on her first assigned kit's learner Board
+// (`{learnPath}`, the same link the button opens): the step strip, asking SK
+// / highlight-to-ask, and the worksheet practice (Check, "I need help") with
+// SK teaching it another way in the chat. Skipped when nothing is assigned.
+// The teacher's `assign` and the parent's `childCard` lines say it in one
+// clause each.
 
 export type WalkRole = "teacher" | "student" | "parent" | "principal" | "coordinator";
 
@@ -86,6 +97,9 @@ export type WalkFacts = {
   roleHats?: boolean;
   /** /present is open to this user (presentAllowed). */
   board?: boolean;
+  /** Student: her first assigned kit on the student Board (learner mode),
+   *  `/present?learn=<piece>&autostart=1` — "Learn with SK"'s own link. */
+  learnPath?: string | null;
   /** Parent: linked children, and how many of those links are verified. */
   children?: number;
   verifiedChildren?: number;
@@ -108,6 +122,7 @@ export type WalkNeed =
   | "analytics"
   | "roleHats"
   | "board"
+  | "learn"
   | "children"
   | "verified"
   | "schoolParent"
@@ -430,12 +445,42 @@ const TEACHER: WalkStopDef[] = [
   { id: "uploadNow", route: LIB, anchors: [UPLOAD] },
 ];
 
+// The student Board (learner mode on /present, 2026-10-31).
+const LEARN_WITH_SK = '[data-tour="learn-with-sk"]';
+const LEARN_STEPS = '[data-tour="learn-steps"]';
+const LEARN_WORKSHEET = '[data-tour="learn-step-worksheet"]';
+const LEARN_PRACTICE = '[data-tour="learn-practice"]';
+const BOARD_SK = '[data-sk="launcher"][data-sk-board="true"]';
+
 const STUDENT: WalkStopDef[] = [
   { id: "hello", route: "/dashboard", anchors: [HERO, LAUNCHER] },
   { id: "assignments", route: "/dashboard", anchors: ['[data-tour="assignments"]'] },
   // Nothing assigned: say so and show the empty "My lessons".
   { id: "openLesson", route: "/dashboard", anchors: ['[data-tour="open-lesson"]', { sel: '[data-tour="assignments"]', line: "openLessonEmpty" }] },
   { id: "progress", route: "/dashboard", anchors: ['[data-tour="progress"]', { sel: '[data-tour="assignments"]', line: "progressEmpty" }] },
+  // "Learn with SK" on a My lessons chapter; nothing assigned yet: where it will be.
+  { id: "learnWithSk", route: "/dashboard", anchors: [LEARN_WITH_SK, { sel: '[data-tour="assignments"]', line: "learnWithSkEmpty" }] },
+  // Her first assigned kit on her own Board: one narration over the step
+  // strip, SK (ask / highlight) and the worksheet practice. Opening a kit
+  // there writes nothing (the learner session is local); nothing is pressed.
+  // The practice box is on screen only once the worksheet is up, so the
+  // part falls back to the strip's Worksheet step, then the strip.
+  {
+    id: "learnBoard",
+    route: "{learnPath}",
+    anchors: [],
+    needs: ["learn"],
+    parts: [
+      { id: "learnSteps", anchors: [LEARN_STEPS] },
+      { id: "learnAsk", anchors: [BOARD_SK, HERO, LAUNCHER] },
+      { id: "learnPractice", anchors: [LEARN_PRACTICE, LEARN_WORKSHEET, LEARN_STEPS] },
+    ],
+  },
+  // TODO(phase 4, SK student Board plan): mastery per concept ("how am I
+  // doing?") and the plan her teacher (or parent) approves. No anchor exists
+  // on this branch yet; once the mastery card renders, add the stop with its
+  // line in all ten files (sk.walkthrough.student.mastery), e.g.:
+  // { id: "mastery", route: "{learnPath}", anchors: ['[data-tour="learn-mastery"]'], needs: ["learn"], chips: ["howAmIDoing"] },
   { id: "myBooks", route: "/dashboard", anchors: ['[data-tour="my-books"]', { sel: HERO, line: "myBooksNone" }], demo: "bookActivate" },
   { id: "diaryTimetable", route: "/dashboard", anchors: ['[data-tour="diary-nav"]', '[data-tour="timetable-nav"]', MOBILE_NAV], needs: ["diary"] },
   // Near the end, while the tour is still on /dashboard (the widget's page).

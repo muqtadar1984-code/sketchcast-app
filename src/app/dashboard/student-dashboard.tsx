@@ -81,6 +81,7 @@ export default async function StudentDashboard({
                           href={l.href}
                           className="inline-flex min-h-11 items-center rounded-lg bg-[#0C8175] px-3 py-2 text-sm font-medium text-white sm:min-h-0 sm:py-1.5"
                           data-learn-with-sk
+                          data-tour="learn-with-sk"
                         >
                           {l.label ? `${t.learnWithSk} · ${l.label}` : t.learnWithSk}
                         </a>

@@ -880,10 +880,15 @@ export default function PresentClient({
   const coachSteps = (["video", "slides", "worksheet"] as const).filter((x) => avail[x]);
   const coachBar =
     learnerMode && step ? (
-      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-[#17544C] bg-[#12302C] px-3 py-2" data-board="coach">
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-[#17544C] bg-[#12302C] px-3 py-2" data-board="coach" data-tour="learn-steps">
         <ol className="flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[11px]">
           {coachSteps.map((x, i) => (
-            <li key={x} className={x === step ? "text-[#4FD6C2]" : "text-[#5F6F69]"} aria-current={x === step ? "step" : undefined}>
+            <li
+              key={x}
+              className={x === step ? "text-[#4FD6C2]" : "text-[#5F6F69]"}
+              aria-current={x === step ? "step" : undefined}
+              data-tour={x === "worksheet" ? "learn-step-worksheet" : undefined}
+            >
               {i + 1}. {learn.steps[x]}
             </li>
           ))}

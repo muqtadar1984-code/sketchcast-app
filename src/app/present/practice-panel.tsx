@@ -193,7 +193,7 @@ export function PracticePanel({
     q.correct ? words.correct : q.review ? words.review : q.attempts > 0 && !q.correct ? (q.answer ? words.shown : words.incorrect) : null;
 
   return (
-    <section className="grid gap-3 rounded-xl border border-[#222C30] bg-[#0F1417] p-3 text-[#E7EDE9]" data-board="practice" aria-live="polite">
+    <section className="grid gap-3 rounded-xl border border-[#222C30] bg-[#0F1417] p-3 text-[#E7EDE9]" data-board="practice" data-tour="learn-practice" aria-live="polite">
       {!closed && (
         <form
           className="grid gap-2"
