@@ -46,6 +46,7 @@ export default function SkLauncher({
   role,
   hat,
   introDue,
+  replay = false,
   board,
   tutor,
 }: {
@@ -57,6 +58,9 @@ export default function SkLauncher({
   /** Server-decided from user_tour_progress("sk-intro") vs SK_INTRO_TOUR.version:
    *  the first-login walkthrough starts by itself (and records its end). */
   introDue: boolean;
+  /** A tester's hard refresh (layout: SK_DEBUG_EMAILS + Ctrl+Shift+R): the
+   *  first-login run starts again from stop 1, dropping any run this tab carries. */
+  replay?: boolean;
   /** S1: set by /present only — the Board bridge the Shell drives. With it the
    *  avatar sits bottom-START (the Stage's corner video owns bottom-end). */
   board?: SkBoardBridge | null;
@@ -67,6 +71,16 @@ export default function SkLauncher({
   // replay in the same session never writes the seen row again while the
   // server still holds the old one.
   const [introPending, setIntroPending] = useState(introDue);
+  // Declared BEFORE useSkWalkthrough, so the carried run is gone before its
+  // restore effect reads sessionStorage.
+  useEffect(() => {
+    if (!replay) return;
+    try {
+      window.sessionStorage.removeItem(WALK_STORE_KEY);
+    } catch {
+      /* blocked storage: nothing was carried */
+    }
+  }, [replay]);
   const pathname = usePathname();
   // A landing page (never the Board or the kit player, which bring their own
   // bridges): the greeting shows once per session and the first-login tour
