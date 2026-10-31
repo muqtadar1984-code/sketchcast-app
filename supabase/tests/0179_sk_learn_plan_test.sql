@@ -21,7 +21,7 @@
 --   8. decline keeps the note and writes nothing else.
 -- Every check RAISEs on failure; a clean run prints PASS lines and
 -- "ALL 0179 CHECKS PASSED", then ROLLS BACK (nothing persists).
--- NOT YET RUN (written with the migration, 2026-10-31).
+-- Dry-run against production 2026-10-31 inside BEGIN … ROLLBACK (founder-approved).
 -- ============================================================================
 begin;
 
@@ -95,9 +95,11 @@ begin
   insert into classes (id, name, grade, teacher_id, school_id) values (C1, '6A', '6', t1, S), (C2, '7A', '7', t2, S) on conflict (id) do nothing;
   insert into enrollments (class_id, student_id) values (C1, st1), (C1, st3), (C2, st2) on conflict do nothing;
   insert into parent_links (parent_id, child_id, source) values (pa1, st1, 'school'), (hp, hs, 'self') on conflict do nothing;
-  insert into generations (id, kind, owner_id, school_id, status) values
-    (kit, 'presentation', t1, S, 'done'), (ws, 'worksheet', t1, S, 'done'), (nxt, 'presentation', t1, S, 'done'),
-    (hkit, 'presentation', hp, null, 'done'), (hnx, 'presentation', hp, null, 'done')
+  -- Distinct `part`s: two presentations by one owner within 10 s are otherwise
+  -- refused by reject_double_submit (0112) as a double click.
+  insert into generations (id, kind, owner_id, school_id, status, params) values
+    (kit, 'presentation', t1, S, 'done', '{"part":"1"}'), (ws, 'worksheet', t1, S, 'done', '{}'), (nxt, 'presentation', t1, S, 'done', '{"part":"2"}'),
+    (hkit, 'presentation', hp, null, 'done', '{"part":"1"}'), (hnx, 'presentation', hp, null, 'done', '{"part":"2"}')
   on conflict (id) do nothing;
   insert into generation_shares (generation_id, class_id, shared_by) values (kit, C1, t1), (ws, C1, t1);
   insert into generation_shares (generation_id, student_id, shared_by) values (hkit, hs, hp);
