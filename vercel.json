@@ -4,6 +4,10 @@
     {
       "path": "/api/lifecycle/reminders",
       "schedule": "30 3 * * *"
+    },
+    {
+      "path": "/api/sk/gaps/nightly",
+      "schedule": "0 20 * * *"
     }
   ]
 }
