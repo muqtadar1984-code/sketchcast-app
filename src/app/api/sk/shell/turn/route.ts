@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
@@ -30,7 +30,11 @@ import type { FactsDb } from "@/sk/facts";
 import { buildShellPrompt, groundingCheck } from "@/sk/shell/prompt";
 import { contextEntities, groundWithContext } from "@/sk/shell/context-entities";
 // S5 slice E: a claimed action no completed action backs is dropped (§8.4 gates).
-import { actionClaimGuard, claimCorrection } from "@/sk/shell/action-claims";
+import { CLAIM_CANT, actionClaimGuard, claimCorrection } from "@/sk/shell/action-claims";
+// 2026-10-31: the SK gap tracker — this turn's misses, written once when it ends.
+import { recordGaps } from "@/sk/gaps/store";
+import { TurnGaps } from "@/sk/gaps/turn";
+import { NOTE_GAP_RESULT, NOTE_GAP_TOOL_DEF, isNoteGapCall, parseNoteGap } from "@/sk/gaps/note-gap";
 import { issueActionToken, publicParams } from "@/sk/shell/tokens";
 import { maskBookSecrets } from "@/sk/book-activate";
 import { TEACH_MAX_TOKENS, clipWords, teachingBlock, teachingQuestion, teachingSupport, teachingSupportTokens, type TeachRef, type TeachTarget, type TeachingSupport } from "@/sk/shell/teach";
@@ -114,6 +118,19 @@ export const runtime = "nodejs";
 
 const SK_SHELL_DEFAULT_MODEL = "claude-sonnet-5-5";
 const MAX_TEXT = 600;
+
+/** Run after the reply when Next can (`after`), else now without waiting. */
+function later(task: () => Promise<unknown>): void {
+  try {
+    after(task);
+  } catch {
+    void task();
+  }
+}
+
+/** A failed capability that is NOT a miss the user met: a rules hand-off to
+ *  the model (not_allowed) or a cancelled turn. */
+const GAP_SKIP_ERRORS: ReadonlySet<string> = new Set(["not_allowed", "aborted"]);
 
 const enc = new TextEncoder();
 const frame = (ev: SkTurnEvent) => enc.encode(`data: ${JSON.stringify(ev)}\n\n`);
@@ -265,6 +282,10 @@ export async function POST(request: Request) {
     tools: string[];
     reply: string;
   } = { route: decision.intent, model: null, firstTextMs: null, toolCalls: 0, tools: [], reply: "" };
+  // 2026-10-31 (SK gap tracker, src/sk/gaps): every way SK could not help
+  // this turn — its own sk.note_gap, a built-in refusal, a failed tool, a
+  // grounding drop — noted here and written ONCE in finish(), after the reply.
+  const gaps = new TurnGaps();
   // S2: the greeting's one-turn offer ("Your kit for … is ready — want me to
   // open it?"). A bare yes / "open it" opens it, a no declines; anything else
   // runs as usual and the offer lapses (rememberTurn drops it).
@@ -295,6 +316,10 @@ export async function POST(request: Request) {
     // analytics gate and is metered ONCE — the audit row written BEFORE the
     // read, refused when that write fails; the shared 60/day counter.
     schoolRead: schoolReadGate(ctx, g.supabase, body.turnId, now),
+    // Gap tracker: a capability that failed in front of the user (tool_failed).
+    onResult: (name, r) => {
+      if (!r.ok && !GAP_SKIP_ERRORS.has(r.error ?? "")) gaps.note("tool_failed", { tool: name, error: r.error ?? null, summary: r.summary });
+    },
   };
 
   // Board moves are audited against the PRESENT session (sk_actions.session_id:
@@ -380,7 +405,10 @@ export async function POST(request: Request) {
     const claims = actionClaimGuard(full);
     // §9.3: every name and number must occur in the narration (or the question).
     const verdict = groundingCheck(claims.text, [...teachingSupportTokens(sup), say], body.text);
-    if (!verdict.ok || claims.dropped.length) console.info("sk-shell.turn teach grounding", JSON.stringify({ turnId: body.turnId, unsupported: verdict.unsupported, dropped: [...claims.dropped, ...verdict.dropped] }));
+    if (!verdict.ok || claims.dropped.length) {
+      console.info("sk-shell.turn teach grounding", JSON.stringify({ turnId: body.turnId, unsupported: verdict.unsupported, dropped: [...claims.dropped, ...verdict.dropped] }));
+      gaps.note("grounding", { where: "teach", unsupported: verdict.unsupported, claims: claims.dropped, dropped: verdict.dropped });
+    }
     const text = (verdict.ok ? claims.text.trim() : verdict.text.trim()) || say;
     const cut = !verdict.ok || claims.dropped.length > 0;
     return { text, sources: [name, "manifest"], lang: tl.lang, ...(usage ? { usage } : {}), ...(cut && text !== say ? { trimmed: true } : {}) };
@@ -415,6 +443,7 @@ export async function POST(request: Request) {
     full = unmarked(full, "board_knowledge");
     const claims = actionClaimGuard(full);
     const verdict = groundingCheck(claims.text, knowledgeSupportTokens(k.passages), body.text);
+    if (!verdict.ok || claims.dropped.length) gaps.note("grounding", { where: "board_knowledge", unsupported: verdict.unsupported, claims: claims.dropped, dropped: verdict.dropped });
     const said = (verdict.ok ? claims.text.trim() : verdict.text.trim()) || k.passages[0]!.text;
     const cite = citeLine(k.passages.map((p) => ({ title: p.source_title, chapter: p.chapter, section: p.section })), linesLocale(tl.lang));
     return {
@@ -487,7 +516,10 @@ export async function POST(request: Request) {
     const claims = actionClaimGuard(full);
     // §9.3: every name and number must occur on the slide (text or notes) or in the question.
     const verdict = groundingCheck(claims.text, selectionSupportTokens(slide), body.text);
-    if (!verdict.ok || claims.dropped.length) console.info("sk-shell.turn selection grounding", JSON.stringify({ turnId: body.turnId, unsupported: verdict.unsupported, dropped: [...claims.dropped, ...verdict.dropped] }));
+    if (!verdict.ok || claims.dropped.length) {
+      console.info("sk-shell.turn selection grounding", JSON.stringify({ turnId: body.turnId, unsupported: verdict.unsupported, dropped: [...claims.dropped, ...verdict.dropped] }));
+      gaps.note("grounding", { where: "selection", unsupported: verdict.unsupported, claims: claims.dropped, dropped: verdict.dropped });
+    }
     const text = (verdict.ok ? claims.text.trim() : verdict.text.trim()) || fallback;
     const cut = !verdict.ok || claims.dropped.length > 0;
     return { text, sources: [name, "deck"], label: "grounded", ...(usage ? { usage } : {}), ...(cut && text !== fallback ? { trimmed: true } : {}) };
@@ -501,6 +533,8 @@ export async function POST(request: Request) {
       // S6 slice C: the turn's last navigate (a Board deep link names the
       // class and lesson the teacher opened — workflow.ts workflowFromTurn).
       let navigatedTo: string | null = null;
+      // Gap tracker: the reply as sent (timing.reply keeps only 120 characters).
+      let gapReply = "";
       /** 2026-10-31: the last line of defence — no tool-call markup is ever
        *  sent, spoken or stored, whichever path wrote the text (markup.ts). */
       const shown = (text: string, where: string): string => cleanReply(text, ctx.user.locale, () => console.warn("sk-shell.turn tool markup", JSON.stringify({ turnId: body.turnId, where })));
@@ -513,6 +547,7 @@ export async function POST(request: Request) {
           timing.tools.push(ev.name);
         }
         if (ev.type === "text" && timing.reply.length < 120) timing.reply += ev.text;
+        if (ev.type === "text" && gapReply.length < 1000) gapReply = (gapReply + ev.text).slice(0, 1000);
         if (abort.signal.aborted) return;
         try {
           controller.enqueue(frame(ev));
@@ -522,7 +557,30 @@ export async function POST(request: Request) {
       };
       let logged = false;
       let loggedDebug = false;
+      let gapsWritten = false;
       const finish = () => {
+        // 2026-10-31: the turn's misses, once, after the reply (never slows it).
+        // The question is stored AS ASKED — book codes are NOT masked here
+        // (founder decision 2026-10-31); every log line still masks them.
+        if (!gapsWritten) {
+          gapsWritten = true;
+          const rows = gaps.rows({
+            turnId: body.turnId,
+            userId: g.user.id,
+            role: ctx.user.role,
+            locale: uiLocale,
+            page: body.collector.path,
+            modality: body.modality,
+            question: body.text,
+            reply: gapReply,
+            route: timing.route,
+            tools: timing.tools,
+          });
+          if (rows.length && admin) {
+            const db = admin;
+            later(() => recordGaps(db, rows));
+          }
+        }
         if (!logged) {
           logged = true;
           // Server-side only, never an env value: the routing, the route the
@@ -652,7 +710,10 @@ export async function POST(request: Request) {
           const issued = admin
             ? await issueActionToken(admin, { userId: ctx.user.id, action: r.confirm.action, params: r.confirm.params, contextHash: ctx.contextHash, now: new Date() })
             : null;
-          if (!issued) return { declined: SK_CANNOT_CONFIRM };
+          if (!issued) {
+            gaps.note("refusal", { kind: "cannot_confirm", action: r.confirm.action });
+            return { declined: SK_CANNOT_CONFIRM };
+          }
           return {
             // sealed_* params stay on the server (S4 slice D: a book code's HMAC).
             event: { type: "confirm", token: issued.token, action: r.confirm.action, title: r.confirm.title, params: publicParams(r.confirm.params) as Record<string, string | number | boolean | null>, expiresAt: issued.expiresAt },
@@ -796,6 +857,7 @@ export async function POST(request: Request) {
       const runLanguage = async (cmd: LangCommand) => {
         const code = targetCode(cmd.target, uiLocale);
         if (!code) {
+          gaps.note("refusal", { kind: "language_unsupported", target: cmd.target });
           sendLang(answer.lang);
           const text = langLine(LANG_CAN_SPEAK, answer.lang, { list: canSpeakList() });
           send({ type: "text", text });
@@ -891,6 +953,7 @@ export async function POST(request: Request) {
         // A source in a language SK cannot answer in (Tamil): said once per conversation.
         if (answer.unsupportedSource && memory.langNoted !== answer.unsupportedSource && decision.intent !== "lang") {
           noted = answer.unsupportedSource;
+          gaps.note("refusal", { kind: "language_source_unsupported", language: answer.unsupportedSource });
           send({ type: "text", text: `${langLine(LANG_SOURCE_UNSUPPORTED, answer.lang, { source: answer.unsupportedSource, language: ownName(answer.lang) })} ` });
         }
 
@@ -1191,6 +1254,7 @@ export async function POST(request: Request) {
           // (school.health carries the `analytics` flag, so the runner would
           // only say not_allowed and hand a school question to the model).
           if (ctx.flags.analytics !== true) {
+            gaps.note("refusal", { kind: "analytics_off", capability: name });
             const text = lineFor(SM_ANALYTICS_OFF, ctx.user.locale);
             send({ type: "text", text });
             done({ sources: [], label: "declined" }, text, []);
@@ -1249,6 +1313,13 @@ export async function POST(request: Request) {
         const before: { kind: HandoffBefore | null; args: Record<string, unknown> } = { kind: null, args: {} };
         // A board.* tool the model chose is audited against the present session too.
         const run = async (call: Parameters<typeof runShell>[0], signal?: AbortSignal): Promise<string> => {
+          // Gap tracker (signal A): SK's own note — recorded, never run, never
+          // traced (so it is not a tool that answered, a chip or an action).
+          if (isNoteGapCall(call.name)) {
+            const n = parseNoteGap(call.args);
+            gaps.note("self", { wanted: n?.wanted ?? null, why: n?.why ?? null }, n?.wanted ?? null);
+            return NOTE_GAP_RESULT;
+          }
           const hb = routing === "model" ? handoffBefore(call.name, call.args ?? {}, ctx) : null;
           if (hb) {
             if (!before.kind) {
@@ -1263,7 +1334,7 @@ export async function POST(request: Request) {
         const history: Turn[] = memory.turns.map((t) => ({ role: t.role, text: t.text }));
         // 2026-10-30: a tour is on in her tab — the model knows, so it never
         // says there is no tour, and points her at "continue the tour".
-        const system = [buildShellPrompt({ ctx, capabilities: allowed.map((c) => c.meta), memory, routing }), body.walk?.active ? walkPromptLine(body.walk) : ""].filter(Boolean).join("\n\n");
+        const system = [buildShellPrompt({ ctx, capabilities: allowed.map((c) => c.meta), memory, routing, noteGap: true }), body.walk?.active ? walkPromptLine(body.walk) : ""].filter(Boolean).join("\n\n");
         let full = "";
         let usage: Usage | undefined;
         let cancelled = false;
@@ -1274,7 +1345,8 @@ export async function POST(request: Request) {
           system,
           history,
           question: body.text,
-          tools: allowed.length ? toToolDefs(allowed) : undefined,
+          // + sk.note_gap (gap tracker): intercepted in `run`, never a capability.
+          tools: [...toToolDefs(allowed), NOTE_GAP_TOOL_DEF],
           runTool: run,
           maxToolRounds: 3,
           maxTokens: 600,
@@ -1372,6 +1444,7 @@ export async function POST(request: Request) {
           // Server-side only: which tokens failed and what was dropped, so a
           // false positive can be diagnosed from the runtime logs (2026-10-28).
           console.info("sk-shell.turn grounding", JSON.stringify({ turnId: body.turnId, tools: trace.map((t) => t.name), unsupported: verdict.unsupported, claims: claims.dropped, dropped: verdict.dropped, context: verdict.context }));
+          if (!verdict.ok || claims.dropped.length) gaps.note("grounding", { where: "model", unsupported: verdict.unsupported, claims: claims.dropped, dropped: verdict.dropped });
         }
         const navHit = [...trace].reverse().find((t) => t.result.ok && t.result.navigate)?.result.navigate;
         let text: string;
@@ -1431,6 +1504,8 @@ export async function POST(request: Request) {
         // user, else "I can't do that from here."
         if (claims.dropped.length && !(act && "event" in act && act.event.type === "confirm") && !(act && "declined" in act)) {
           const line = claimCorrection(claims.kinds, allowed.map((c) => c.meta.name), ctx.user.locale);
+          // "I can't do that from here." is a refusal (the card line is not: it offers the way).
+          if (line === lineFor(CLAIM_CANT, ctx.user.locale)) gaps.note("refusal", { kind: "action_claim", kinds: claims.kinds, line });
           if (text === SK_NOTHING_ON_THAT || !text.trim()) {
             text = line;
             label = "declined";

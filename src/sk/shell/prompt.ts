@@ -8,6 +8,7 @@ import { SK_NOTHING_ON_THAT } from "./types";
 import type { SkMemory } from "./memory";
 import { NAV_LABEL } from "@/sk/capabilities/navigate";
 import { LANG_INFO } from "./language";
+import { NOTE_GAP_API_NAME } from "@/sk/gaps/note-gap";
 
 export const SK_SHELL_PROMPT_VERSION = "sk-shell-1.0";
 export const SK_SUPPLEMENTARY_LEAD = "this is not in your data, but";
@@ -146,7 +147,7 @@ export function modelFirstRules(ctx: SkContext, capabilities: SkCapabilityMeta[]
   return lines;
 }
 
-export function buildShellPrompt(input: { ctx: SkContext; capabilities: SkCapabilityMeta[]; memory?: SkMemory | null; routing?: "rules" | "model" }): string {
+export function buildShellPrompt(input: { ctx: SkContext; capabilities: SkCapabilityMeta[]; memory?: SkMemory | null; routing?: "rules" | "model"; noteGap?: boolean }): string {
   const { ctx, capabilities } = input;
   // 2026-10-30: the turn's answer language (the question's own > the
   // conversation's > the source's > the UI's — shell/language.ts).
@@ -221,6 +222,13 @@ export function buildShellPrompt(input: { ctx: SkContext; capabilities: SkCapabi
       ? [
           "15. The Board's ROLL is its pages, numbered as the Board shows them ('30 / 54' is page 30 of 54; see ROLL). 'Next / previous / first / last page' always means the roll → board.page. 'Page N' → board.page to=page with n=N, exactly as shown. 'Slide N in the deck', 'deck slide N', 'deck page N' → board.page to=deck (it loads the deck first when it is not on the roll; 'load the deck and go to slide N' is ONE board.load_deck call with page=N). 'Video slide N', 'slide N in the video' → board.slide (k=N−1); 'video slide N as a page' → board.page to=video. A bare 'slide N' when the deck or the video's slides are on the roll: what is on screen decides — a deck slide on screen means the deck (to=deck), a video slide page means to=video, otherwise board.slide. Never say you cannot move the roll.",
           "16. A live highlight (highlight= in the Board context) with 'explain this', 'what does this mean', 'tell me more about this' → board.explain_selection, alone: it reads the highlighted slide itself. Do not read the deck with kit.documents for it.",
+        ]
+      : []),
+    // 2026-10-31: the gap tracker (signal A) — only the main model call has
+    // the sk__note_gap tool (src/sk/gaps/note-gap.ts); the teaching calls do not.
+    ...(input.noteGap
+      ? [
+          `17. Whenever you must decline, cannot find what the user asked for, or SketchCast has no such feature, ALSO call ${NOTE_GAP_API_NAME} with wanted = what the user wanted, in one short line (why = the reason, optional). Write your answer to the user first, as usual, then call it in the same response; the user never sees it, so never mention it, and after its result write nothing more. Do not call it when you answered the request.`,
         ]
       : []),
     ...(input.routing === "model" ? ["", ...modelFirstRules(ctx, capabilities)] : []),

@@ -88,6 +88,7 @@ const EXEMPT: Record<string, string> = {
   "consent/route.ts": "a parent revoking SK consent for a child (revocation deletes data) must always work",
   "prefs/route.ts": "three booleans on /dashboard/settings, the caller's own rows through RLS",
   "school-memory/route.ts": "the principal's learning-memory switch on /dashboard/settings",
+  "gaps/nightly/route.ts": "Vercel Cron only (Bearer CRON_SECRET, no user session): 401 to every caller without the secret, before any read or model call",
 };
 
 function walk(dir: string, out: string[] = []): string[] {

@@ -62,7 +62,8 @@ export const CLICK_ONLY: ReadonlySet<string> = new Set([
   "recap.publish", // publishing a recap to parents
 ]);
 
-export type ActOutput = { response: SkActResponse; memory: SkMemory };
+/** `action`: the verified token's action, when there was one (the gap tracker's context). */
+export type ActOutput = { response: SkActResponse; memory: SkMemory; action?: string };
 
 // ── assign → 0164 sk_assign_with_token ───────────────────────────────────────
 
@@ -185,5 +186,5 @@ export async function executeAction(input: ActInput): Promise<ActOutput> {
   }
 
   const memory = rememberTurn(input.memory, { user: input.via === "voice" ? "Yes. (spoken confirmation)" : "(confirmed by click)", assistant: response.summary, entities }, now);
-  return { response, memory };
+  return { response, memory, ...(row?.action ? { action: row.action } : {}) };
 }

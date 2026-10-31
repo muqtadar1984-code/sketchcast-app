@@ -27,6 +27,7 @@ import { normalizeIntent } from "./intent-normalize";
 import { fromApiToolName } from "./registry";
 import { bookActivateOf, normRuleText, selectionAsk, type RulesDecision } from "./rules";
 import { SK_NOTHING_ON_THAT, type SkCapabilityResult, type SkContext } from "./types";
+import { isNoteGapCall } from "@/sk/gaps/note-gap";
 
 export type SkRouting = "rules" | "model";
 
@@ -162,7 +163,11 @@ const LOW_CONFIDENCE_RE =
   /\b(?:i'?m not sure|i am not sure|not certain|i don'?t know|i do not know|i can'?t tell|i'?m unsure|no idea|i don'?t have (?:that|enough) information)\b|tidak pasti|saya tidak tahu|لست متأكد|لا أعرف/iu;
 
 /** Why the fast model's first round must be redone on the full model, or null. */
-export function escalationReason(calls: ToolCall[], text: string, escalateOn: ReadonlySet<string>): string | null {
+export function escalationReason(allCalls: ToolCall[], text: string, escalateOn: ReadonlySet<string>): string | null {
+  // 2026-10-31: sk.note_gap (the gap tracker's note) is not an answer — the
+  // round is judged as if it were not there, so a fast model's "I'm not sure"
+  // still escalates whether or not it noted the gap.
+  const calls = allCalls.filter((c) => !isNoteGapCall(c.name));
   const hit = calls.map((c) => fromApiToolName(c.name)).find((n) => escalateOn.has(n));
   if (hit) return `tool:${hit}`;
   if (calls.length) return null;
