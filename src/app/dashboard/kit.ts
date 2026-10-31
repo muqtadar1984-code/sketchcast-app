@@ -220,3 +220,57 @@ export function kitUnitsFor(chapters: { num: number; partCount: number }[]): Kit
       : [{ chapterNum: c.num, part: null }],
   );
 }
+
+/** The kinds that make up a kit — the presentation plus DOC_KINDS. */
+export const KIT_KINDS = ["presentation", ...DOC_KINDS] as const;
+
+/** A generation already on the book, as the skip-existing filter reads it. */
+export type ExistingKitRow = {
+  kind: string;
+  chapter_ref: string | null;
+  status: string;
+  params: { part?: unknown; revision?: unknown } | null;
+};
+
+/**
+ * Splits a Generate all run into the units to queue and the units to skip
+ * because they already have a kit.
+ *
+ * A unit "has a kit" when ANY of its kit-kind generations is not in error —
+ * queued, processing or done. Testing the presentation alone is not enough: a
+ * unit whose video failed but whose documents built would get a whole second
+ * kit, documents and all, when the teacher only needed the video's retry
+ * chip. A unit where every row errored is queued again. Those duplicates are
+ * exactly what re-clicks made on 2026-10-22 (4 kits).
+ *
+ * Two shapes of old kit cover more than their own key:
+ *  - a CHAPTER-level kit (no part) on a multi-part chapter is the pre-2026-08-27
+ *    shape: one presentation that rendered every part — it covers all of them;
+ *  - a part-1 row on a chapter with no part map (a map that shrank to one part)
+ *    is the chapter's own unit.
+ * Revision papers (params.revision) ride on a chapter_ref but are not kits.
+ */
+export function skipExistingUnits(
+  chapters: { num: number; partCount: number }[],
+  existing: ReadonlyArray<ExistingKitRow>,
+): { toQueue: KitUnit[]; skipped: KitUnit[] } {
+  const kitKinds = new Set<string>(KIT_KINDS);
+  const covered = new Set<string>();
+  for (const g of existing) {
+    if (g.status === "error" || !kitKinds.has(g.kind) || g.params?.revision === true) continue;
+    if (g.chapter_ref === null) continue;
+    const part = typeof g.params?.part === "number" && g.params.part >= 1 ? g.params.part : null;
+    covered.add(`${g.chapter_ref}|${part ?? "all"}`);
+  }
+  const toQueue: KitUnit[] = [];
+  const skipped: KitUnit[] = [];
+  for (const c of chapters) {
+    const ref = String(c.num);
+    const chapterKit = covered.has(`${ref}|all`);
+    for (const u of kitUnitsFor([c])) {
+      const has = u.part === null ? chapterKit || covered.has(`${ref}|1`) : chapterKit || covered.has(`${ref}|${u.part}`);
+      (has ? skipped : toQueue).push(u);
+    }
+  }
+  return { toQueue, skipped };
+}

@@ -1079,6 +1079,30 @@
         "poor": "Poor"
       }
     },
+    "generateAll": {
+      "button": "Generate all ({n})",
+      "title": "Generate all missing kits",
+      "checking": "Checking this book and the queue…",
+      "loadFailed": "Couldn't check this book's kits. Try again.",
+      "summary": "{kits} kits · {credits} credits",
+      "summaryUnmetered": "{kits} kits · not charged on your plan",
+      "etaMin": "About {low}–{high} min to finish ({ahead} jobs ahead of you)",
+      "etaHours": "About {low}–{high} h to finish ({ahead} jobs ahead of you)",
+      "etaNote": "An estimate, from how fast the queue moved over the last 7 days.",
+      "etaUnknown": "Couldn't estimate the finish time right now.",
+      "body": "A chapter with several parts gets one kit per part, built one after another. Each kit is a lesson, a slide deck and five documents. The deck is free; every other item costs one credit.",
+      "skipLabel": "Skip parts that already have a kit",
+      "skippedList": "Already have a kit ({n}):",
+      "unitPart": "{title} · Part {part}",
+      "nothingLeft": "Every part of this book already has a kit. Untick “Skip” to build new versions.",
+      "dailyWarn": "This would bring today's total to {total} kits. Batches this big slow the queue for everyone, so consider a few chapters at a time.",
+      "indexing": "This book's chapters are being re-read. Generate all is available again when that finishes.",
+      "confirm": "Generate {n} kits",
+      "cancel": "Cancel",
+      "stoppedAt": "Queued {queued} kits, then stopped at {where}: {error}",
+      "whereChapter": "chapter {n}",
+      "wherePart": "chapter {n} part {part}"
+    },
     "gate": {
       "banner": "This upload doesn't look like a textbook. Lessons generated from it will likely be weak.",
       "structureBanner": "This book indexed, but its chapter list looks unreliable. Check the chapters before generating — lessons follow these boundaries.",

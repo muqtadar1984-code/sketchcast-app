@@ -1079,6 +1079,30 @@
         "poor": "Faible"
       }
     },
+    "generateAll": {
+      "button": "Tout générer ({n})",
+      "title": "Générer tous les kits manquants",
+      "checking": "Vérification du livre et de la file d'attente…",
+      "loadFailed": "Impossible de vérifier les kits de ce livre. Réessayez.",
+      "summary": "{kits} kits · {credits} crédits",
+      "summaryUnmetered": "{kits} kits · non facturés avec votre formule",
+      "etaMin": "Environ {low}–{high} min pour terminer ({ahead} tâches avant vous)",
+      "etaHours": "Environ {low}–{high} h pour terminer ({ahead} tâches avant vous)",
+      "etaNote": "Une estimation, d'après la vitesse de la file sur les 7 derniers jours.",
+      "etaUnknown": "Impossible d'estimer l'heure de fin pour le moment.",
+      "body": "Un chapitre en plusieurs parties reçoit un kit par partie, construits l'un après l'autre. Chaque kit comprend une leçon, un diaporama et cinq documents. Le diaporama est gratuit ; chaque autre élément coûte un crédit.",
+      "skipLabel": "Ignorer les parties qui ont déjà un kit",
+      "skippedList": "Ont déjà un kit ({n}) :",
+      "unitPart": "{title} · Partie {part}",
+      "nothingLeft": "Chaque partie de ce livre a déjà un kit. Décochez « Ignorer » pour créer de nouvelles versions.",
+      "dailyWarn": "Cela porterait votre total du jour à {total} kits. Des lots aussi grands ralentissent la file pour tout le monde : pensez à générer quelques chapitres à la fois.",
+      "indexing": "Les chapitres de ce livre sont en cours de relecture. « Tout générer » sera de nouveau disponible ensuite.",
+      "confirm": "Générer {n} kits",
+      "cancel": "Annuler",
+      "stoppedAt": "{queued} kits mis en file, puis arrêt à {where} : {error}",
+      "whereChapter": "chapitre {n}",
+      "wherePart": "chapitre {n} partie {part}"
+    },
     "gate": {
       "banner": "Ce fichier importé ne ressemble pas à un manuel scolaire. Les leçons générées à partir de celui-ci seront probablement faibles.",
       "structureBanner": "Ce livre a été indexé, mais sa liste de chapitres semble peu fiable. Vérifiez les chapitres avant de générer — les leçons suivent ces limites.",

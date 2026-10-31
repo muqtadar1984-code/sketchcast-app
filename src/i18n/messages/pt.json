@@ -1079,6 +1079,30 @@
         "poor": "Ruim"
       }
     },
+    "generateAll": {
+      "button": "Gerar tudo ({n})",
+      "title": "Gerar todos os kits em falta",
+      "checking": "A verificar este livro e a fila…",
+      "loadFailed": "Não foi possível verificar os kits deste livro. Tente novamente.",
+      "summary": "{kits} kits · {credits} créditos",
+      "summaryUnmetered": "{kits} kits · sem custo no seu plano",
+      "etaMin": "Cerca de {low}–{high} min para terminar ({ahead} tarefas à sua frente)",
+      "etaHours": "Cerca de {low}–{high} h para terminar ({ahead} tarefas à sua frente)",
+      "etaNote": "Uma estimativa, com base na velocidade da fila nos últimos 7 dias.",
+      "etaUnknown": "Não é possível estimar a hora de conclusão neste momento.",
+      "body": "Um capítulo com várias partes recebe um kit por parte, criados um após o outro. Cada kit inclui uma lição, uma apresentação de diapositivos e cinco documentos. A apresentação é gratuita; cada outro item custa um crédito.",
+      "skipLabel": "Saltar as partes que já têm um kit",
+      "skippedList": "Já têm um kit ({n}):",
+      "unitPart": "{title} · Parte {part}",
+      "nothingLeft": "Todas as partes deste livro já têm um kit. Desmarque «Saltar» para criar novas versões.",
+      "dailyWarn": "Isto levaria o seu total de hoje a {total} kits. Lotes tão grandes tornam a fila mais lenta para todos, por isso considere gerar alguns capítulos de cada vez.",
+      "indexing": "Os capítulos deste livro estão a ser relidos. «Gerar tudo» volta a ficar disponível quando terminar.",
+      "confirm": "Gerar {n} kits",
+      "cancel": "Cancelar",
+      "stoppedAt": "{queued} kits colocados na fila; depois parou em {where}: {error}",
+      "whereChapter": "capítulo {n}",
+      "wherePart": "capítulo {n} parte {part}"
+    },
     "gate": {
       "banner": "Este arquivo enviado não parece um livro didático. As aulas geradas a partir dele provavelmente serão fracas.",
       "structureBanner": "Este livro foi indexado, mas a lista de capítulos parece pouco confiável. Confira os capítulos antes de gerar — as aulas seguem esses limites.",

@@ -3,17 +3,22 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
-import { kitRows, kitUnitsFor } from "./kit";
+import { kitRows, type KitUnit } from "./kit";
 import { defaultNarrationForGrade } from "@/utils/narration";
 import { stampConfirmation } from "@/utils/junk-gate";
 import JunkGateDialog, { type JunkGateInfo } from "./junk-gate-dialog";
+import GenerateAllDialog from "./generate-all-dialog";
+import { fmt } from "@/i18n/format";
+import { type LibraryMessages } from "./labels";
 import { useBusyWhile } from "@/components/loading/loading-indicator";
 
 type Chapter = { num: number; title: string; partCount: number };
 
-// Generates the full KIT (lesson + deck + five documents, 0059) for every chapter
-// passed in (the parent passes only the chapters without a lesson). Each row
-// fires the on_generation_created trigger → one job each.
+// Generates the full KIT (lesson + deck + five documents, 0059) for every unit
+// of the book that has none yet. The parent passes EVERY chapter; the confirm
+// dialog (generate-all-dialog.tsx) reads the book's kits fresh and leaves out
+// the units that already have one. Each row fires the on_generation_created
+// trigger → one job each.
 //
 // PER PART, not per chapter (founder decision 2026-08-27). A chapter with a
 // part map used to get ONE chapter-level kit: a single presentation that
@@ -37,10 +42,17 @@ export default function GenerateAllButton({
   language = null,
   bookGrade = null,
   gate = null,
+  missing,
+  t,
 }: {
   bookId: string;
   schoolId: string | null;
+  /** Every chapter of the book, with its part count. */
   chapters: Chapter[];
+  /** Units without a kit as of the page render — the button's count. The
+      dialog re-reads the real list before anything is queued. */
+  missing: number;
+  t: LibraryMessages;
   /** Detected book language (0056) — lessons inherit it + its voice. */
   language?: string | null;
   /** Book grade — age-appropriate narration default (grades 1–4 → Storytelling). */
@@ -54,37 +66,27 @@ export default function GenerateAllButton({
   // The app-wide spinner follows this control's own busy state.
   useBusyWhile(busy);
   const [gateOpen, setGateOpen] = useState(false);
+  // Non-null while the cost dialog is open: whether the junk-gate was
+  // confirmed on the way in (its stamp then rides on every row).
+  const [costOpen, setCostOpen] = useState<{ confirmed: boolean } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const g = t.generateAll;
 
-  if (chapters.length === 0) return null;
+  if (chapters.length === 0 || missing === 0) return null;
 
   // Gated book (junk-upload gate): its dialog comes FIRST — no point asking
   // the cost question on a run the teacher then abandons; confirming falls
-  // through to the normal flow (native cost confirm included) with the stamp.
+  // through to the cost dialog with the stamp.
   function onClick() {
     if (gate) {
       setGateOpen(true);
       return;
     }
-    void onGenerateAll(false);
+    setCostOpen({ confirmed: false });
   }
 
-  async function onGenerateAll(confirmed: boolean) {
-    setGateOpen(false);
-    // Say the real size of the click. The old text promised "Documents are
-    // free", which the ledger has never agreed with: every artifact is one
-    // credit (fair_use_used sums the SIX billable kinds; 0103 left the deck
-    // out), so a 7-artifact kit still costs 6.
-    const totalKits = chapters.reduce((n, c) => n + Math.max(1, c.partCount), 0);
-    const kitsWord = totalKits === 1 ? "kit" : "kits";
-    if (
-      !confirm(
-        `Generate ${totalKits} ${kitsWord} across ${chapters.length} chapter(s)? ` +
-          `A chapter with several parts gets one kit per part, built one after another. ` +
-          `Each kit is a lesson, a slide deck and five documents. The deck is free; every other item costs one credit.`,
-      )
-    )
-      return;
+  async function onGenerateAll(units: KitUnit[], confirmed: boolean) {
+    setCostOpen(null);
     setBusy(true);
     setError(null);
     const supabase = createClient();
@@ -92,7 +94,7 @@ export default function GenerateAllButton({
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) {
-      setError("Not signed in.");
+      setError(t.notSignedIn);
       setBusy(false);
       return;
     }
@@ -102,8 +104,8 @@ export default function GenerateAllButton({
     let queued = 0;
     let stopError: string | null = null;
     // Chapter, then part within it — the order the teacher reads the Library in,
-    // and the order the queue will build them in.
-    const units = kitUnitsFor(chapters);
+    // and the order the queue will build them in (the dialog keeps
+    // kitUnitsFor's order).
     for (const u of units) {
       const rows = kitRows({
         bookId,
@@ -120,11 +122,9 @@ export default function GenerateAllButton({
         // Name the unit that stopped it: "chapter 9" is not enough to find when
         // the run was queuing part 3 of it.
         const where = u.part
-          ? `chapter ${u.chapterNum + 1} part ${u.part}`
-          : `chapter ${u.chapterNum + 1}`;
-        stopError = queued
-          ? `Queued ${queued} kit${queued === 1 ? "" : "s"}, then stopped at ${where}: ${gErr.message}`
-          : gErr.message;
+          ? fmt(g.wherePart, { n: u.chapterNum + 1, part: u.part })
+          : fmt(g.whereChapter, { n: u.chapterNum + 1 });
+        stopError = queued ? fmt(g.stoppedAt, { queued, where, error: gErr.message }) : gErr.message;
         break;
       }
       queued++;
@@ -144,15 +144,27 @@ export default function GenerateAllButton({
         disabled={busy}
         className="h-8 px-3 rounded-lg border border-[#1FB8A6] text-[#0C8175] text-xs font-medium hover:bg-[#E2F4F1] disabled:opacity-50 whitespace-nowrap"
       >
-        {busy ? "Queuing…" : `Generate all (${chapters.length})`}
+        {busy ? t.queuing : fmt(g.button, { n: missing })}
       </button>
       {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
       {gateOpen && gate && (
         <JunkGateDialog
           gate={gate}
           busy={busy}
-          onConfirm={() => void onGenerateAll(true)}
+          onConfirm={() => {
+            setGateOpen(false);
+            setCostOpen({ confirmed: true });
+          }}
           onCancel={() => setGateOpen(false)}
+        />
+      )}
+      {costOpen && (
+        <GenerateAllDialog
+          bookId={bookId}
+          chapters={chapters}
+          t={t}
+          onConfirm={(units) => void onGenerateAll(units, costOpen.confirmed)}
+          onCancel={() => setCostOpen(null)}
         />
       )}
     </>

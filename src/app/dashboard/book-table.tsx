@@ -77,7 +77,10 @@ export type BookRow = {
   chapters: ChapterRow[];
   /** Chapters with no kit yet. partCount is the index-time part map's size —
    *  "Generate all" queues one kit PER PART, so it needs the count. */
-  pendingChapters: { num: number; title: string; partCount: number }[];
+  /** Every chapter, for Generate all — its dialog skips units with a kit. */
+  kitChapters: { num: number; title: string; partCount: number }[];
+  /** Units with no non-error kit as of this render (Generate all's count). */
+  missingKits: number;
   otherLessons: (CellLesson & { title: string })[];
   /** Lessons queued via "Generate selected" (params.batch) — own section at the book's end. */
   batchLessons: (CellLesson & { title: string; kind: string; chapterRef: string | null })[];
@@ -391,8 +394,17 @@ export default function BookTable({
                   // One primary action (generate what's missing); the occasional
                   // paper tools sit behind "More" so they stop competing with it.
                   <div className="flex items-center justify-end gap-2 py-1.5">
-                    {b.pendingChapters.length > 0 && (
-                      <GenerateAllButton bookId={b.id} schoolId={schoolId} chapters={b.pendingChapters} language={b.language} bookGrade={b.grade} gate={gate} />
+                    {b.missingKits > 0 && (
+                      <GenerateAllButton
+                        bookId={b.id}
+                        schoolId={schoolId}
+                        chapters={b.kitChapters}
+                        missing={b.missingKits}
+                        language={b.language}
+                        bookGrade={b.grade}
+                        gate={gate}
+                        t={t}
+                      />
                     )}
                     <BookTools t={t}>
                     {/* Revision papers: worksheets/test papers over a group of
