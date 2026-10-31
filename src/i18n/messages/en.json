@@ -107,7 +107,8 @@
       "inHours": "in {n}h",
       "inDays": "in {n} days"
     },
-    "settings": "Settings"
+    "settings": "Settings",
+    "more": "More"
   },
   "student": {
     "title": "My lessons",

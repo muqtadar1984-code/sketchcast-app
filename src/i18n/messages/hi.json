@@ -107,7 +107,8 @@
       "inHours": "{n} घं में",
       "inDays": "{n} दिन में"
     },
-    "settings": "सेटिंग्स"
+    "settings": "सेटिंग्स",
+    "more": "और"
   },
   "student": {
     "title": "मेरे पाठ",

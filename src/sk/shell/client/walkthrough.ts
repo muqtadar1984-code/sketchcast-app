@@ -374,6 +374,35 @@ export function findAnchor<E>(anchors: PlannedStop["anchors"], dom: AnchorDom<E>
   return null;
 }
 
+/** The control a stop would show if only it were not hidden (phone layout,
+ *  2026-10-31: a control inside a closed sheet). Per anchor list (one per
+ *  part, or the stop's own), the FIRST anchor with any match on the page
+ *  decides, exactly as findAnchor ranks them: visible → that list needs
+ *  nothing; only hidden → EVERY match of it is returned (a control can have
+ *  several hidden copies — the header's, a sheet's — and only the container
+ *  holding one of them can open). A later, visible fallback never stands in
+ *  for a hidden earlier control. Empty when there is nothing to reveal. */
+export function hiddenAnchor<E>(lists: Array<PlannedStop["anchors"]>, dom: AnchorDom<E>): E[] {
+  const all = (sel: string): E[] => {
+    try {
+      if (dom.queryAll) return dom.queryAll(sel);
+      const one = dom.query(sel);
+      return one ? [one] : [];
+    } catch {
+      return [];
+    }
+  };
+  for (const anchors of lists) {
+    for (const a of anchors) {
+      const found = all(a.sel);
+      if (!found.length) continue;
+      if (found.some((x) => dom.visible(x))) break;
+      return found;
+    }
+  }
+  return [];
+}
+
 // ── combined stops: one narration, the highlight moving part by part ───────
 
 /** One part of a combined stop as found on the page: its control (or a

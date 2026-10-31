@@ -1,5 +1,11 @@
 @import "tailwindcss";
 
+/* `tabbar:` — true while a teacher's phone tab bar is on the page
+   (app-header renders it for a plain teacher below md; phone layout
+   2026-10-31). Everything that rearranges around the bar keys off this, so
+   every other profile's phone layout is untouched by construction. */
+@custom-variant tabbar (body:has([data-tabbar]) &);
+
 /* ── "Live Ink" design system ───────────────────────────────────────────────
    Clean near-white canvas, near-black navy ink, one rare teal accent, and a
    warm marker highlight used sparingly. The brand's one bold move is the
@@ -470,11 +476,63 @@ html {
   /* The corner widgets float over the page, so the last thing on it would sit
      underneath them with nowhere to scroll. Reserve room below the content:
      SK's standing figure is 112px tall at bottom-4, the round launchers 44px. */
-  body:has([data-corner]) {
+  body:not(:has([data-tabbar])):has([data-corner]) {
     padding-bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
   }
   /* Not on the Board: /present lays itself out (its own phone layout). */
-  body:has([data-sk="launcher"]:not([data-sk-board])) {
+  body:not(:has([data-tabbar])):has([data-sk="launcher"]:not([data-sk-board])) {
     padding-bottom: calc(8.5rem + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* ── A teacher's phone: the tab bar (phone-tab-bar.tsx) ─────────────────────
+   Below md, for a plain teacher only (the bar is the switch). The page ends
+   clear of the bar; the floating widgets ride above it; SK leaves its corner
+   and stands in the bar's middle slot, its bubble and menu opening upward.
+   Unlayered on purpose: these must beat the widgets' own offset utilities. */
+@media (max-width: 767px) {
+  body:has([data-tabbar]) {
+    padding-bottom: calc(64px + 1.5rem + env(safe-area-inset-bottom, 0px));
+  }
+  /* scrollIntoView (the tour, links to #ids) stops short of the bar. */
+  html:has([data-tabbar]) {
+    scroll-padding-bottom: calc(64px + 2rem + env(safe-area-inset-bottom, 0px));
+  }
+  body:has([data-tabbar]) [data-corner] {
+    margin-bottom: calc(64px + 0.75rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  body:has([data-tabbar]) [data-sk="launcher"]:not([data-sk-board]) {
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 18px);
+    margin: 0;
+    align-items: center;
+  }
+  body:has([data-tabbar]) [data-sk="corner-row"] {
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+  body:has([data-tabbar]) [data-sk="avatar"] {
+    height: 56px;
+    width: 56px;
+    border-radius: 9999px;
+    overflow: hidden;
+    background: var(--color-teal-mist);
+    box-shadow: 0 0 0 3px #fff, 0 0 0 5px var(--color-teal), 0 10px 20px -8px rgba(12, 129, 117, 0.6);
+  }
+  body:has([data-tabbar]) [data-sk="avatar-full"],
+  body:has([data-tabbar]) [data-sk="bubble-tail"],
+  body:has([data-tabbar]) [data-sk="bubble-tail2"] {
+    display: none;
+  }
+  body:has([data-tabbar]) [data-sk="avatar-face"] {
+    display: block;
+  }
+  /* SK's middle slot only while SK is on for this viewer. */
+  body:not(:has([data-sk="launcher"])) [data-tabbar-sk] {
+    display: none;
   }
 }

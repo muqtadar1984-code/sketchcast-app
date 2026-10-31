@@ -13,6 +13,7 @@ import LessonCard from "./lesson-card";
 import BookTools from "./book-tools";
 import AssignModal, { type ChildRow, type ClassRow } from "./assign-modal";
 import ChapterGenerate from "./chapter-generate";
+import ChapterSheet from "./chapter-sheet";
 import BatchGenerate from "./batch-generate";
 import ExamGenerate, { type ExamChapterOpt } from "./exam-generate";
 import BookHealthBadge, { type BookHealth } from "./book-health-badge";
@@ -129,6 +130,19 @@ export type BetaState = {
 // chapter ships Part 1..N videos and a deck per part). Multi-part lessons
 // render ONE LINE PER PART, stacked — "Part 2 · Watch · Deck" — instead of a
 // single crowded row of Pt links.
+// A chapter in one word or two, for its single row on a teacher's phone
+// (chapter-sheet.tsx): made (and how many parts), being made, failed, or not
+// yet. Read from the chapter's lesson and its parts' lessons; every word is an
+// existing Library string.
+function chapterState(ch: ChapterRow, t: LibraryMessages): { status: string; tone: "ready" | "busy" | "none" } {
+  const lessons = [ch.presentation, ...ch.parts.map((p) => p.presentation)].filter((l): l is CellLesson => !!l);
+  const parts = ch.parts.length > 1 ? ` · ${fmt(t.partMany, { list: `1–${ch.parts.length}` })}` : "";
+  if (lessons.some((l) => l.status === "done")) return { status: `${t.status.done}${parts}`, tone: "ready" };
+  if (lessons.some((l) => l.status === "queued" || l.status === "processing")) return { status: t.status.processing, tone: "busy" };
+  if (lessons.some((l) => l.status === "error")) return { status: t.status.error, tone: "none" };
+  return { status: `${t.card.notGenerated}${parts}`, tone: "none" };
+}
+
 function ArtifactLinks({ lesson, t }: { lesson: CellLesson; t: LibraryMessages }) {
   const videos = lesson.videos?.length ? lesson.videos : lesson.video ? [lesson.video] : [];
   const decks = lesson.decks?.length ? lesson.decks : lesson.deck ? [lesson.deck] : [];
@@ -422,73 +436,73 @@ export default function BookTable({
                 )}
                 <ul className="border-t border-[#EEF0EC] divide-y divide-[#EEF0EC]">
                   {b.chapters.map((ch) => (
-                    <li key={ch.num} className="py-2.5">
-                      <span className="text-sm text-[#14181F] block truncate">
-                        <span className="text-[#98A0A9]">{ch.num + 1}.</span> {ch.title}
-                      </span>
-                      <ChapterGenerate
-                        bookId={b.id}
-                        schoolId={schoolId}
-                        chapterNum={ch.num}
-                        classes={classes}
-                        childTargets={childTargets}
-                        beta={beta}
-                        multiPartTrial={!!beta && ch.parts.length > 1}
-                        lessons={{
-                          presentation: ch.presentation,
-                          deck: ch.deck,
-                          lesson_plan: ch.lessonPlan,
-                          activity: ch.activity,
-                          worksheet: ch.worksheet,
-                          exam_paper: ch.exam,
-                          case_study: ch.caseStudy,
-                        }}
-                        extraAssignableIds={ch.parts
-                          .flatMap((p) => [p.presentation, p.deck, p.worksheet, p.exam])
-                          .filter((l): l is CellLesson => !!l && l.status === "done")
-                          .map((l) => l.id)}
-                        bookLanguage={b.language}
-                        bookGrade={b.grade}
-                        gate={gate}
-                        premiumVoices={premiumVoices}
-                        t={t}
-                      />
-                      {/* Per-part lesson units (index-time part map): one row
-                          per part, each with its OWN kit, generated on demand.
-                          Beta mirrors the DB pin (0057) exactly: only the
-                          pinned (book, chapter, part) triple stays live —
-                          everything else shows dashes, never Generate. */}
-                      {ch.parts.length > 1 && (
-                        <div className="mt-2 space-y-2">
-                          {ch.parts.map((p) => {
-                            const locked =
-                              !!beta?.pinned &&
-                              (beta.pinned.bookId !== b.id ||
-                                beta.pinned.chapterRef !== String(ch.num) ||
-                                beta.pinned.part !== p.n);
-                            return (
-                              <LessonCard
-                                key={p.n}
-                                bookId={b.id}
-                                schoolId={schoolId}
-                                chapterNum={ch.num}
-                                part={p}
-                                classes={classes}
-                                childTargets={childTargets}
-                                chapterTitle={ch.title}
-                                bookTitle={b.title}
-                                locked={locked}
-                                trackViews={!!beta}
-                                bookLanguage={b.language}
-                                bookGrade={b.grade}
-                                gate={gate}
-                                premiumVoices={premiumVoices}
-                                t={t}
-                              />
-                            );
-                          })}
-                        </div>
-                      )}
+                    <li key={ch.num} className="py-2.5 tabbar:max-md:py-1">
+                      {/* One row + a sheet on a teacher's phone; inline everywhere else. */}
+                      <ChapterSheet num={ch.num + 1} title={ch.title} {...chapterState(ch, t)} closeLabel={t.common.close}>
+                        <ChapterGenerate
+                          bookId={b.id}
+                          schoolId={schoolId}
+                          chapterNum={ch.num}
+                          classes={classes}
+                          childTargets={childTargets}
+                          beta={beta}
+                          multiPartTrial={!!beta && ch.parts.length > 1}
+                          lessons={{
+                            presentation: ch.presentation,
+                            deck: ch.deck,
+                            lesson_plan: ch.lessonPlan,
+                            activity: ch.activity,
+                            worksheet: ch.worksheet,
+                            exam_paper: ch.exam,
+                            case_study: ch.caseStudy,
+                          }}
+                          extraAssignableIds={ch.parts
+                            .flatMap((p) => [p.presentation, p.deck, p.worksheet, p.exam])
+                            .filter((l): l is CellLesson => !!l && l.status === "done")
+                            .map((l) => l.id)}
+                          bookLanguage={b.language}
+                          bookGrade={b.grade}
+                          gate={gate}
+                          premiumVoices={premiumVoices}
+                          t={t}
+                        />
+                        {/* Per-part lesson units (index-time part map): one row
+                            per part, each with its OWN kit, generated on demand.
+                            Beta mirrors the DB pin (0057) exactly: only the
+                            pinned (book, chapter, part) triple stays live —
+                            everything else shows dashes, never Generate. */}
+                        {ch.parts.length > 1 && (
+                          <div className="mt-2 space-y-2">
+                            {ch.parts.map((p) => {
+                              const locked =
+                                !!beta?.pinned &&
+                                (beta.pinned.bookId !== b.id ||
+                                  beta.pinned.chapterRef !== String(ch.num) ||
+                                  beta.pinned.part !== p.n);
+                              return (
+                                <LessonCard
+                                  key={p.n}
+                                  bookId={b.id}
+                                  schoolId={schoolId}
+                                  chapterNum={ch.num}
+                                  part={p}
+                                  classes={classes}
+                                  childTargets={childTargets}
+                                  chapterTitle={ch.title}
+                                  bookTitle={b.title}
+                                  locked={locked}
+                                  trackViews={!!beta}
+                                  bookLanguage={b.language}
+                                  bookGrade={b.grade}
+                                  gate={gate}
+                                  premiumVoices={premiumVoices}
+                                  t={t}
+                                />
+                              );
+                            })}
+                          </div>
+                        )}
+                      </ChapterSheet>
                     </li>
                   ))}
                 </ul>
