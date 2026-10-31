@@ -126,8 +126,8 @@ export default async function SchoolBooksPage() {
   return (
     <div className="min-h-screen bg-[#FCFCFA] text-[#14181F]">
       <AppHeader />
-      <main className="max-w-7xl mx-auto px-6 py-10">
-        <h1 className="text-4xl mb-2">{t.title}</h1>
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
+        <h1 className="text-3xl sm:text-4xl mb-2">{t.title}</h1>
         <InkUnderline className="block h-3 w-28 mb-3" />
         <p className="text-[#5B6470] mb-7">{t.intro}</p>
 
@@ -138,7 +138,7 @@ export default async function SchoolBooksPage() {
             {books.map((b) => {
               const kits = kitCount.get(b.id) ?? 0;
               return (
-                <div key={b.id} className="px-5 py-3.5 flex items-start justify-between gap-4">
+                <div key={b.id} className="px-4 sm:px-5 py-3.5 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-4">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-display font-medium [overflow-wrap:anywhere]">{b.title}</span>
@@ -163,7 +163,7 @@ export default async function SchoolBooksPage() {
                       {kits === 1 ? t.kitsOne : fmt(t.kitsMany, { n: kits })}
                     </div>
                   </div>
-                  <div className="shrink-0 self-center">
+                  <div className="shrink-0 sm:self-center">
                     <WithdrawBook bookId={b.id} title={b.title} t={t.withdraw} />
                   </div>
                 </div>

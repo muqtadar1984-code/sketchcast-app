@@ -144,11 +144,11 @@ export default function EventEditor({
   return (
     <>
       {existing ? (
-        <button onClick={() => setOpen(true)} className="btn-ghost h-8 px-2.5 text-xs">
+        <button onClick={() => setOpen(true)} className="btn-ghost h-11 sm:h-8 px-3 sm:px-2.5 text-sm sm:text-xs">
           {t.edit}
         </button>
       ) : (
-        <button onClick={() => setOpen(true)} className="btn-primary h-10 px-4 text-sm">
+        <button onClick={() => setOpen(true)} className="btn-primary h-11 sm:h-10 px-4 text-sm">
           {t.add}
         </button>
       )}
@@ -157,7 +157,7 @@ export default function EventEditor({
           <form
             onSubmit={save}
             onClick={(e) => e.stopPropagation()}
-            className="card w-full max-w-md p-6 space-y-3 max-h-[90dvh] overflow-y-auto"
+            className="card w-full max-w-md p-4 sm:p-6 space-y-3 max-h-[90dvh] overflow-y-auto"
           >
             <h2 className="text-lg">{existing ? t.editTitle : t.newTitle}</h2>
             <input
@@ -165,13 +165,13 @@ export default function EventEditor({
               placeholder={t.titlePlaceholder}
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="field w-full h-10 px-3 text-sm"
+              className="field w-full h-11 sm:h-10 px-3 text-base sm:text-sm"
               maxLength={120}
             />
             <div className="grid grid-cols-2 gap-2">
               <label className="text-xs text-[#5B6470]">
                 {t.type}
-                <select value={kind} onChange={(e) => setKind(e.target.value)} className="field w-full h-10 px-2 text-sm mt-1">
+                <select value={kind} onChange={(e) => setKind(e.target.value)} className="field w-full h-11 sm:h-10 px-2 text-base sm:text-sm mt-1">
                   {KINDS.map((k) => (
                     <option key={k} value={k}>
                       {t.kinds[k]}
@@ -182,7 +182,7 @@ export default function EventEditor({
               <label className="text-xs text-[#5B6470]">
                 {t.whoSeesIt}
                 {isAdmin ? (
-                  <select value={audience} onChange={(e) => setAudience(e.target.value)} className="field w-full h-10 px-2 text-sm mt-1">
+                  <select value={audience} onChange={(e) => setAudience(e.target.value)} className="field w-full h-11 sm:h-10 px-2 text-base sm:text-sm mt-1">
                     {AUDIENCES.map((a) => (
                       <option key={a} value={a}>
                         {t.audiences[a]}
@@ -190,7 +190,7 @@ export default function EventEditor({
                     ))}
                   </select>
                 ) : (
-                  <div className="field w-full h-10 px-3 text-sm mt-1 flex items-center bg-[#F5F6F3]">
+                  <div className="field w-full h-11 sm:h-10 px-3 text-base sm:text-sm mt-1 flex items-center bg-[#F5F6F3]">
                     {t.audiences.class}
                   </div>
                 )}
@@ -199,7 +199,7 @@ export default function EventEditor({
             {(isAdmin ? audience === "class" : true) && (
               <label className="text-xs text-[#5B6470] block">
                 {t.class}
-                <select value={classId} onChange={(e) => setClassId(e.target.value)} className="field w-full h-10 px-2 text-sm mt-1">
+                <select value={classId} onChange={(e) => setClassId(e.target.value)} className="field w-full h-11 sm:h-10 px-2 text-base sm:text-sm mt-1">
                   {classes.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.name}
@@ -208,7 +208,7 @@ export default function EventEditor({
                 </select>
               </label>
             )}
-            <label className="flex items-center gap-2 text-sm text-[#5B6470]">
+            <label className="flex items-center gap-2 min-h-11 sm:min-h-0 text-sm text-[#5B6470]">
               <input type="checkbox" checked={allDay} onChange={(e) => setAllDay(e.target.checked)} />
               {t.allDay}
             </label>
@@ -220,7 +220,7 @@ export default function EventEditor({
                   type={allDay ? "date" : "datetime-local"}
                   value={allDay ? start.slice(0, 10) : start}
                   onChange={(e) => setStart(allDay ? `${e.target.value}T00:00` : e.target.value)}
-                  className="field w-full h-10 px-2 text-sm mt-1"
+                  className="field w-full h-11 sm:h-10 px-2 text-base sm:text-sm mt-1"
                 />
               </label>
               <label className="text-xs text-[#5B6470]">
@@ -229,7 +229,7 @@ export default function EventEditor({
                   type={allDay ? "date" : "datetime-local"}
                   value={allDay ? end.slice(0, 10) : end}
                   onChange={(e) => setEnd(e.target.value ? (allDay ? `${e.target.value}T00:00` : e.target.value) : "")}
-                  className="field w-full h-10 px-2 text-sm mt-1"
+                  className="field w-full h-11 sm:h-10 px-2 text-base sm:text-sm mt-1"
                 />
               </label>
             </div>
@@ -237,30 +237,30 @@ export default function EventEditor({
               placeholder={t.locationPlaceholder}
               value={location}
               onChange={(e) => setLocation(e.target.value)}
-              className="field w-full h-10 px-3 text-sm"
+              className="field w-full h-11 sm:h-10 px-3 text-base sm:text-sm"
               maxLength={120}
             />
             <textarea
               placeholder={t.detailsPlaceholder}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="field w-full px-3 py-2 text-sm min-h-[70px]"
+              className="field w-full px-3 py-2 text-base sm:text-sm min-h-[70px]"
               maxLength={1000}
             />
             {error && <p className="text-sm text-red-600">{error}</p>}
-            <div className="flex items-center justify-between pt-1">
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
               {existing ? (
-                <button type="button" onClick={() => void remove()} disabled={busy} className="text-sm text-[#B42318] hover:underline">
+                <button type="button" onClick={() => void remove()} disabled={busy} className="min-h-11 sm:min-h-0 text-sm text-[#B42318] hover:underline">
                   {t.delete}
                 </button>
               ) : (
                 <span />
               )}
               <div className="flex items-center gap-2">
-                <button type="button" onClick={() => setOpen(false)} className="btn-ghost h-10 px-4 text-sm">
+                <button type="button" onClick={() => setOpen(false)} className="btn-ghost h-11 sm:h-10 px-4 text-sm">
                   {t.common.cancel}
                 </button>
-                <button type="submit" disabled={busy} className="btn-primary h-10 px-4 text-sm disabled:opacity-50">
+                <button type="submit" disabled={busy} className="btn-primary h-11 sm:h-10 px-4 text-sm disabled:opacity-50">
                   {busy ? t.common.saving : t.common.save}
                 </button>
               </div>

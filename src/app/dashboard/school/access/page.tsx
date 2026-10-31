@@ -95,14 +95,14 @@ export default async function AccessModelPage() {
   return (
     <div className="min-h-screen bg-[#FCFCFA] text-[#14181F]">
       <AppHeader />
-      <main className="max-w-5xl mx-auto px-6 py-10">
-        <h1 className="text-4xl mb-2">{t.title}</h1>
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
+        <h1 className="text-3xl sm:text-4xl mb-2">{t.title}</h1>
         <InkUnderline className="block h-3 w-28 mb-3" />
         <p className="text-[#5B6470] mb-7">{t.subtitle}</p>
 
         <div data-tour="school-access" className="card divide-y divide-[#EEF0EC] mb-10">
           {MODEL_ROWS.map((key) => (
-            <div key={key} className="px-5 py-3 grid sm:grid-cols-[160px_1fr] gap-x-4 gap-y-1">
+            <div key={key} className="px-4 sm:px-5 py-3 grid sm:grid-cols-[160px_1fr] gap-x-4 gap-y-1">
               <span className="font-medium">{t.model[key].role}</span>
               <span className="text-sm text-[#5B6470]">{t.model[key].sees}</span>
             </div>
@@ -121,8 +121,8 @@ export default async function AccessModelPage() {
                   const mine = scopes.filter((s) => s.coordinator_id === cid);
                   const fp = footprint(new Set(mine.map((s) => s.grade)));
                   return (
-                    <div key={cid} className="px-5 py-3">
-                      <div className="flex items-center justify-between gap-3 mb-1.5">
+                    <div key={cid} className="px-4 sm:px-5 py-3">
+                      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 mb-1.5">
                         <span className="font-medium">{nameOf.get(cid) || dict.school.fallback.coordinator}</span>
                         <span className="text-xs text-[#5B6470] tabular">
                           {fmt(t.reach.footprint, { classes: fp.classes, students: fp.students, teachers: fp.teachers })}
