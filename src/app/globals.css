@@ -498,6 +498,12 @@ html {
   html:has([data-tabbar]) {
     scroll-padding-bottom: calc(64px + 2rem + env(safe-area-inset-bottom, 0px));
   }
+  /* The SK tour brings its control to the top of the screen here (SK's
+     bubble is low, above the bar): a margin so it lands a little below the
+     top edge of the page or of the sheet it sits in, never under it. */
+  body:has([data-tabbar]) :is([data-tour], [data-tour-book]) {
+    scroll-margin-top: 16dvh;
+  }
   body:has([data-tabbar]) [data-corner] {
     margin-bottom: calc(64px + 0.75rem + env(safe-area-inset-bottom, 0px));
   }

@@ -32,7 +32,7 @@ export default function ChapterSheet({
 }) {
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
-  const mine = useSkReveal(box, setOpen);
+  const mine = useSkReveal(box, open, setOpen);
   const close = () => {
     mine();
     setOpen(false);

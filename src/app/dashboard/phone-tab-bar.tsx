@@ -59,7 +59,7 @@ export default function PhoneTabBar({
   const path = usePathname();
   const [open, setOpen] = useState(false);
   const sheet = useRef<HTMLDivElement>(null);
-  const mine = useSkReveal(sheet, setOpen);
+  const mine = useSkReveal(sheet, open, setOpen);
   const moreActive = more.some((t) => isActive(t.href, path, tabs));
   const close = () => {
     mine();

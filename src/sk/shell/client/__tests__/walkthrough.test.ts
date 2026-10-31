@@ -18,7 +18,7 @@ import {
   SETTLE_QUIET_MS,
   START_SETTLE_CAP_MS,
   advanceDelay,
-  hiddenAnchor,
+  stopControls,
   atRoute,
   backStop,
   createWalkStarter,
@@ -1182,7 +1182,7 @@ describe("the start reports how it ended", () => {
   });
 });
 
-describe("hiddenAnchor (phone layout: the tour opens what hides a control)", () => {
+describe("stopControls (phone layout: what the tour's sheets follow)", () => {
   type El = { id: string; shown: boolean };
   const domOf = (map: Record<string, El[]>) => ({
     query: (sel: string) => map[sel]?.[0] ?? null,
@@ -1191,37 +1191,46 @@ describe("hiddenAnchor (phone layout: the tour opens what hides a control)", () 
   });
   const a = (sel: string) => ({ sel });
 
-  it("returns the stop's own control when it is on the page but hidden", () => {
+  it("names the stop's own control when it is on the page but hidden, over a visible later fallback", () => {
     const kit = { id: "kit", shown: false };
     const list = { id: "list", shown: true };
-    expect(hiddenAnchor([[a("kit"), a("list")]], domOf({ kit: [kit], list: [list] }))).toEqual([kit]);
+    expect(stopControls([[a("kit"), a("list")]], domOf({ kit: [kit], list: [list] }))).toEqual([kit]);
   });
 
-  it("reveals nothing when the first control on the page is already visible", () => {
-    const kit = { id: "kit", shown: true };
-    expect(hiddenAnchor([[a("kit")]], domOf({ kit: [kit] }))).toEqual([]);
+  it("names a visible control too, so a sheet the tour opened on it STAYS open rather than closing and reopening", () => {
+    const kit = { id: "kit-in-open-sheet", shown: true };
+    expect(stopControls([[a("kit")]], domOf({ kit: [kit] }))).toEqual([kit]);
   });
 
-  it("skips anchors that are not on the page at all, then decides on the next one", () => {
-    const assign = { id: "assign", shown: false };
-    expect(hiddenAnchor([[a("missing"), a("assign")]], domOf({ assign: [assign] }))).toEqual([assign]);
+  it("names a control out on the page, so a sheet the tour opened elsewhere closes", () => {
+    const more = { id: "book-tools", shown: true };
+    expect(stopControls([[a("more")]], domOf({ more: [more] }))).toEqual([more]);
   });
 
-  it("walks a combined stop part by part: the first part with only a hidden control decides", () => {
-    const bell = { id: "bell", shown: true };
-    const lang = { id: "lang", shown: false };
-    expect(hiddenAnchor([[a("bell")], [a("lang")]], domOf({ bell: [bell], lang: [lang] }))).toEqual([lang]);
-  });
-
-  it("returns every hidden copy, so the container holding any of them can open", () => {
-    const header = { id: "header", shown: false };
-    const sheet = { id: "sheet", shown: false };
-    expect(hiddenAnchor([[a("lang")]], domOf({ lang: [header, sheet] }))).toEqual([header, sheet]);
-  });
-
-  it("prefers a visible copy of a control over a hidden one (the header's tab vs the tab bar's)", () => {
+  it("prefers the visible copies of a control over hidden ones (the tab bar's tab vs the header's)", () => {
     const hiddenCopy = { id: "header", shown: false };
     const shownCopy = { id: "tabbar", shown: true };
-    expect(hiddenAnchor([[a("diary")]], domOf({ diary: [hiddenCopy, shownCopy] }))).toEqual([]);
+    expect(stopControls([[a("diary")]], domOf({ diary: [hiddenCopy, shownCopy] }))).toEqual([shownCopy]);
+  });
+
+  it("returns every hidden copy when none shows, so the container holding any of them can open", () => {
+    const header = { id: "header", shown: false };
+    const sheet = { id: "sheet", shown: false };
+    expect(stopControls([[a("lang")]], domOf({ lang: [header, sheet] }))).toEqual([header, sheet]);
+  });
+
+  it("skips anchors that are not on the page at all", () => {
+    const assign = { id: "assign", shown: false };
+    expect(stopControls([[a("missing"), a("assign")]], domOf({ assign: [assign] }))).toEqual([assign]);
+  });
+
+  it("collects every part of a combined stop", () => {
+    const bell = { id: "bell", shown: true };
+    const lang = { id: "lang", shown: false };
+    expect(stopControls([[a("bell")], [a("lang")]], domOf({ bell: [bell], lang: [lang] }))).toEqual([bell, lang]);
+  });
+
+  it("is empty when nothing the stop names is on the page yet", () => {
+    expect(stopControls([[a("x")]], domOf({}))).toEqual([]);
   });
 });
