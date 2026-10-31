@@ -21,6 +21,11 @@ import { getDictionary, type Dictionary } from "@/i18n/dictionaries";
 import { resolveLocale } from "@/i18n/resolve";
 import { htmlLang } from "@/i18n/locales";
 import { fmt } from "@/i18n/format";
+import { skDbFrom } from "@/sk/store-supabase";
+import { readPracticeMastery, kitTitleOf } from "@/sk/practice/mastery-read";
+import { readPlans } from "@/sk/practice/plan-store";
+import { BandLine, ConceptChips, PlansSection } from "../learn-mastery";
+import { planCards } from "../plan-data";
 
 // The parent home: one section per linked child — S4's "This week" card (the
 // same digest SK's child.week answers from; week-data.ts), their school
@@ -149,6 +154,25 @@ export default async function ChildrenPage() {
   // dashboard UI: the parent-portal flag above is its only gate.
   const weekCards = await loadWeekCards(supabase, user.id, links as unknown as Array<Record<string, unknown>>, workRows, locale, now);
 
+  // SK student Board phase 4: each child's practice mastery and recommended
+  // plans, through the PARENT'S session (0178/0179 is_parent_of). A school
+  // child's plan is the class teacher's to approve — read-only here; a home
+  // child's plan (no class) is this parent's to approve.
+  const childIds = links.map((l) => l.child_id);
+  const skDb = skDbFrom(supabase as never);
+  const [mastery, planRows] = await Promise.all([readPracticeMastery(skDb, childIds, { now }), readPlans(skDb, childIds)]);
+  const planKitNames = new Map(mastery.kits);
+  const missingKits = [...new Set(planRows.map((p) => p.kit_id).filter((k): k is string => typeof k === "string" && !planKitNames.has(k)))];
+  if (missingKits.length) {
+    const { data: kg } = await supabase.from("generations").select("id, title").in("id", missingKits);
+    for (const g of (kg ?? []) as { id: string; title: string | null }[]) planKitNames.set(g.id, kitTitleOf(g));
+  }
+  const childName = (id: string) => {
+    const l = links.find((x) => x.child_id === id);
+    return l?.profiles?.full_name || l?.profiles?.username || dict.school.fallback.child;
+  };
+  const cards = planCards(planRows, { id: user.id, role, teachesClasses: new Set(), children: new Set(childIds) }, { student: childName, kit: (id) => planKitNames.get(id) ?? null });
+
   function itemsFor(childId: string): { school: ChildItem[]; mine: ChildItem[] } {
     const school: ChildItem[] = [];
     const mine: ChildItem[] = [];
@@ -263,6 +287,20 @@ export default async function ChildrenPage() {
                   </span>
                 </div>
                 {weekCards[l.child_id] && <WeekCard card={weekCards[l.child_id]} t={t.week} />}
+                {(mastery.rows.some((r) => r.studentId === l.child_id) || cards.some((c) => planRows.find((p) => p.id === c.id)?.student_id === l.child_id)) && (
+                  <div className="px-5 py-3" data-learn="child-mastery">
+                    <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                      <span className="text-xs font-medium text-[#5B6470]">{dict.learnPlan.masteryTitle}</span>
+                      <BandLine rows={mastery.rows.filter((r) => r.studentId === l.child_id)} t={dict.learnPlan} />
+                    </div>
+                    <ConceptChips rows={mastery.rows.filter((r) => r.studentId === l.child_id)} t={dict.learnPlan} />
+                    {cards.some((c) => planRows.find((p) => p.id === c.id)?.student_id === l.child_id) && (
+                      <div className="mt-3">
+                        <PlansSection plans={cards.filter((c) => planRows.find((p) => p.id === c.id)?.student_id === l.child_id)} t={dict.learnPlan} title={false} />
+                      </div>
+                    )}
+                  </div>
+                )}
                 <p data-tour="progress-recap" className="px-5 py-1.5 text-xs font-medium text-[#5B6470] bg-[#FAFBF9]">
                   {fmt(t.schoolWork, { n: school.length })}
                 </p>

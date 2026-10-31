@@ -19,7 +19,9 @@
 //   4. the help: the ladder's rung (./help.ts rungFor) and its words — the
 //      paper's, the cache's, or Haiku 5.5's (metered against the student's
 //      fair-use cap, cached for the next student) — and the key ONLY at the
-//      "answer" rung.
+//      "answer" rung, and NOT EVEN THEN while the paper is her graded quiz,
+//      not handed in and not past due (phase 4, ./quiz-hold.ts: the worked
+//      step again + locked "quiz").
 // A question already answered right (or a written answer already sent to
 // her teacher) is closed: 409, nothing written.
 
@@ -27,6 +29,7 @@ import type { RawQuestion, RawQuiz } from "@/app/api/quiz/logic";
 import type { DbRow, SkDb } from "@/sk/store-supabase";
 import { checkAnswer, conceptOf, revealKey, shapeAnswer, type RevealedKey } from "./check";
 import { generateHelp, paperHelp, PRACTICE_MODEL, questionHash, rungFor, type HelpModelCall, type Rung } from "./help";
+import { keyHeld, type QuizKeyState } from "./quiz-hold";
 
 /** Answers + help taps one question may take in one practice session. */
 export const MAX_TRIES_PER_QUESTION = 20;
@@ -41,6 +44,13 @@ export type PracticeDeps = {
   call: HelpModelCall | null;
   /** Fair use: may this student cost a model call now? (counts it when yes). */
   meter: () => Promise<boolean>;
+  /**
+   * Phase 4 (founder default): the paper's graded-quiz state for her — the
+   * key is HELD at rung 3 while it is her quiz, not handed in and not past
+   * due (./quiz-hold.ts). The route always passes it; absent = no quiz rule
+   * (tests of the ladder alone). A loader that answers null HOLDS the key.
+   */
+  quizKey?: (studentId: string, generationId: string) => Promise<QuizKeyState | null>;
   now?: () => number;
   log?: (msg: string) => void;
 };
@@ -68,8 +78,10 @@ export type PracticeReply = {
   rung: "none" | Rung;
   /** The rung's words; text null = the client shows its own generic line for the rung. */
   help: { rung: Rung; text: string | null; source: HelpSource } | null;
-  /** The key, ONLY when rung = "answer". */
+  /** The key, ONLY when rung = "answer" and the key is not held for her graded quiz. */
   answer: RevealedKey | null;
+  /** "quiz": rung 3 reached, but the paper is her graded quiz, not yet handed in and not past due — the key is held. */
+  locked: "quiz" | null;
   /** The question is finished (right, or a written answer sent to her teacher). */
   done: boolean;
   /** "wrong_twice" exactly once: on her SECOND wrong answer (SK's teaching hand-off). */
@@ -198,7 +210,12 @@ export async function practise(deps: PracticeDeps, input: PracticeInput): Promis
     () => undefined,
   );
 
-  const help = rung === "none" ? null : { rung, ...(await helpFor(deps, input.generationId, q, rung)) };
+  // Phase 4: at rung 3, a paper that is still her open graded quiz keeps its
+  // key — she gets the worked step again and the "unlocks after you hand in"
+  // line; neither the key nor the (key-restating) explanation is sent.
+  const held = rung === "answer" && !!deps.quizKey && keyHeld(await deps.quizKey(input.studentId, input.generationId), now()).held;
+  const served: Rung | null = rung === "none" ? null : held ? "step" : rung;
+  const help = served ? { rung: served, ...(await helpFor(deps, input.generationId, q, served)) } : null;
   const wrong = wrongBefore + (outcome === "incorrect" ? 1 : 0);
   return {
     status: 200,
@@ -209,7 +226,8 @@ export async function practise(deps: PracticeDeps, input: PracticeInput): Promis
       wrong,
       rung,
       help,
-      answer: rung === "answer" ? revealKey(q) : null,
+      answer: rung === "answer" && !held ? revealKey(q) : null,
+      locked: held ? "quiz" : null,
       done: outcome === "correct" || outcome === "review",
       gap: outcome === "incorrect" && wrong === 2 ? "wrong_twice" : null,
       concept,

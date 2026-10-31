@@ -130,6 +130,8 @@ const SHIPPED = [
   "start_lesson",
   // 2026-10-31: a kit's documents as text — teaching roles only (sk flag).
   "kit.documents",
+  // 2026-10-31 (student Board phase 4): approve a recommended plan — teacher + parent hats, sk flag.
+  "plan.review",
 ];
 const CONTROLS = ["start_tour", "tour_control", "set_answer_language", "repeat_in_language"];
 const STUDENT_ONLY = SHIPPED.filter((n) => n.startsWith("tutor."));
@@ -141,7 +143,7 @@ const STUDENT_AND_PARENT = ["book.activate"];
 const LEADER_ONLY = ["school.health", "notice.school", "school.seats", "school.cost", "school.gaps", "school.trend"];
 const TEACHER_SEES = SHIPPED.filter((n) => !STUDENT_ONLY.includes(n) && !PARENT_ONLY.includes(n) && !STUDENT_AND_PARENT.includes(n) && !LEADER_ONLY.includes(n));
 // S4 slice C: diary.note's parent branch (a note to one of her own children).
-const PARENT_SEES = ["navigate", "context.resolve", "diary.note", ...PARENT_ONLY, ...STUDENT_AND_PARENT, "knowledge.search", ...CONTROLS];
+const PARENT_SEES = ["navigate", "context.resolve", "diary.note", ...PARENT_ONLY, ...STUDENT_AND_PARENT, "knowledge.search", ...CONTROLS, "plan.review"];
 const STUDENT_SEES = ["navigate", ...STUDENT_ONLY, ...STUDENT_AND_PARENT, "knowledge.search", ...CONTROLS]; // no start_lesson: SK Tutor retired 2026-10-31
 
 describe("allowedFor over the shipped registry", () => {
