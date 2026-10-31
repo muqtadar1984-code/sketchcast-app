@@ -81,7 +81,7 @@ import { clockFrom, collect, localeFromLang } from "@/sk/shell/client/collector"
 import { MIGRATED_LOCAL_KEYS, PREF_KEYS, PREF_LOCAL_KEY, applyLook, defaultMicOn, migratedLocalKey, parseLocalPref, pick, pickLook, resolvePrefs, type SkPrefKey, type StoredPrefs } from "@/sk/prefs";
 import { skTurnEvents } from "@/sk/shell/client/sse";
 import { createDictationPasses, createMicGate, createSpeechHold, type MicGate, type SpeechHold } from "@/sk/shell/client/mic-gate";
-import { beaconVoiceEvents, createVoiceLog, type VoiceLog } from "@/sk/shell/client/voice-log";
+import { beaconVoiceEvents, createVoiceLog, type VoiceLog, type WalkVia } from "@/sk/shell/client/voice-log";
 import { createMemoryStore, type MemoryStore } from "@/sk/shell/client/memory-store";
 import { clearConversation, createTranscriptStore, type TranscriptEntry, type TranscriptStore } from "@/sk/shell/client/transcript-store";
 import { BUBBLE_INITIAL, GREETED_KEY, GREETING_MIN_MS, bubbleFadeAt, bubbleOpen, bubbleReduce, hearingPreview, shouldGreet } from "@/sk/shell/client/bubble";
@@ -331,7 +331,7 @@ export default function SkShell({
   /** 2026-10-30: the walkthrough while one runs — inside the speech bubble. */
   walk?: SkShellWalk | null;
   /** "Take the tour" (the avatar's menu), and SK's "Show me around". */
-  onTakeTour?: () => void;
+  onTakeTour?: (via?: WalkVia) => void;
   takeTourLabel?: string;
   /** The student Board (learner mode, 2026-10-31): SK LEADS the lesson. A new
    *  `key` adds `text` to the conversation as SK's own line, shows it in the
@@ -481,7 +481,9 @@ export default function SkShell({
     const gate = createMicGate({
       win: window,
       doc: document,
-      onStop: () => {
+      onStop: (reason) => {
+        // 2026-10-31: why the mic closed (speaking, blur, hidden, idle, manual…).
+        if (micModeRef.current) voiceLogRef.current?.push({ k: "mic", provider: micModeRef.current, why: `stop:${reason}` });
         // A hands-free pass the gate stopped says nothing more: its late
         // words or end are not her turn. (Push-to-talk keeps its last words.)
         if (micModeRef.current === "handsFree") passesRef.current.retire();
@@ -1101,6 +1103,9 @@ export default function SkShell({
         setHearing("");
         const text = dictatedRef.current.trim();
         dictatedRef.current = "";
+        // 2026-10-31: how the pass ended — words (sent as a voice turn when
+        // hands-free) or none — and how long it listened. No words logged.
+        voiceLogRef.current?.push({ k: "mic", provider: mode, why: text ? "heard" : "empty", ms: Date.now() - startedAt, ...(text ? { error: `${text.split(/\s+/).length} words` } : {}) });
         if (mode === "handsFree" && micModeRef.current === "handsFree" && gate.active) {
           if (text) {
             emptyEndsRef.current = 0;
@@ -1138,6 +1143,7 @@ export default function SkShell({
     }
     stopMicRef.current = stop;
     setListening(true);
+    voiceLogRef.current?.push({ k: "mic", provider: mode, why: "listen" });
   }
 
   function pressMic() {
@@ -1196,7 +1202,7 @@ export default function SkShell({
         // starts one — the same start as "Take the tour", no turn, no model.
         if (!walkRef.current && onTakeTourRef.current && walkStartCommand(q)) {
           setInput("");
-          onTakeTourRef.current();
+          onTakeTourRef.current("phrase");
           return;
         }
       }
@@ -1242,6 +1248,9 @@ export default function SkShell({
 
       const skId = uuid();
       const turnId = uuid();
+      // 2026-10-31: every turn to the voice log (no text; the server's debug
+      // line has it under the same id) — typed and spoken alike.
+      voiceLogRef.current?.push({ k: "turn", provider: modality, why: "sent", error: turnId.slice(0, 8), ...(walkRef.current?.state?.active ? { ok: true } : {}) });
       // Phase 3: SK's own lesson shows a quiet line of its own, never a bubble of hers.
       const lead: Entry = teach ? { id: uuid(), who: "sk", text: opts.note ?? "", note: true } : { id: uuid(), who: "user", text: q };
       setEntries((m) => [...m, ...(teach && !opts.note ? [] : [lead]), { id: skId, who: "sk", text: "", pending: true, turnId }]);
@@ -1441,11 +1450,14 @@ export default function SkShell({
           case "walkthrough":
             // A tour command the server caught ("…continue with the tour?"):
             // the running tour takes it. Otherwise "Show me around" (rules.ts,
-            // no model): the launcher restarts the tour.
+            // or the model's start_tour): the launcher restarts the tour.
+            // 2026-10-31: logged, so the server's start can be matched to what
+            // the tab did with it (the turn's id, as in sk-shell.turn debug).
+            voiceLogRef.current?.push({ k: "turn", provider: modality, why: `walkthrough:${ev.action ?? "start"}`, ok: !!onTakeTourRef.current, error: turnId.slice(0, 8) });
             if (ev.action && ev.action !== "start") {
               walkActed = true;
               walkRef.current?.act?.(ev.action);
-            } else onTakeTourRef.current?.();
+            } else onTakeTourRef.current?.(modality === "voice" ? "turn-voice" : "turn-text");
             break;
           case "lang":
             // 2026-10-30: what the text that follows is in. Dictation follows
@@ -1787,7 +1799,7 @@ export default function SkShell({
             icon: "🧭",
             onSelect: () => {
               setMenuOpen(false);
-              onTakeTour();
+              onTakeTour("menu");
             },
           },
         ]

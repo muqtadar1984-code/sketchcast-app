@@ -104,7 +104,7 @@ import {
   type WalkStore,
 } from "@/sk/shell/client/walkthrough";
 import { splitSentences } from "@/sk/shell/client/speech";
-import { beaconVoiceEvents, createVoiceLog, skipOutcome, tourEvent, tourPageState, type TourOutcome, type VoiceLog } from "@/sk/shell/client/voice-log";
+import { beaconVoiceEvents, createVoiceLog, skipOutcome, tourEvent, tourPageState, walkEvent, type TourOutcome, type VoiceLog, type WalkVia } from "@/sk/shell/client/voice-log";
 import type { SkTurnWalk, SkWalkAction } from "@/sk/shell/types";
 import { CLICK_ONLY_DEMOS, walkRoleFor, type WalkDemo, type WalkFacts, type WalkRole } from "@/sk/walkthrough/stops";
 
@@ -112,6 +112,9 @@ export type WalkCopy = Dictionary["sk"]["walkthrough"];
 
 /** A line for the Shell's voice: a new key speaks `text` ("" = be quiet). */
 export type WalkVoice = { key: string; text: string } | null;
+
+/** A start that began no run by now (facts ≤ 8 s + settle ≤ 2 s) is asked once more. */
+const START_RETRY_MS = 12_000;
 
 const SOUND_KEY = "sk.walkthrough.sound";
 
@@ -415,7 +418,8 @@ export type SkWalkthrough = {
   /** She asked SK something: the tour pauses and SK answers normally. */
   onQuestion: () => void;
   /** Start from stop 1. `record` only for the first-login run. */
-  start: (opts?: { record?: boolean }) => void;
+  /** `via`: who asked (the voice log's "walk" events). */
+  start: (opts?: { record?: boolean; via?: WalkVia }) => void;
   /** The Shell reports how a `voice` line ended: the tour moves on by itself
    *  only after it was FULLY spoken. */
   onVoiceDone: (key: string, outcome: LineOutcome) => void;
@@ -676,6 +680,10 @@ export function useSkWalkthrough({
     roleRef.current = { role, hat };
   });
   const starterRef = useRef<WalkStarter<{ record: boolean }> | null>(null);
+  /** Who asked for the start under way (the "walk" events' provider). */
+  const viaRef = useRef<WalkVia>("menu");
+  /** Bumped by every run that begins: a retry checks a run began since it was armed. */
+  const readySeqRef = useRef(0);
   useEffect(() => {
     const starter = createWalkStarter<{ record: boolean }>({
       roleGuess: () => walkRoleFor(roleRef.current.role, roleRef.current.hat),
@@ -692,10 +700,12 @@ export function useSkWalkthrough({
         setStarting(on);
       },
       onReady: (tour, stops, ctx) => {
+        readySeqRef.current += 1;
         setMatch(null);
         setAdvance(null);
         setWalk(startWalk(tour, stops, { record: ctx.record, runId: uid() }));
       },
+      onEvent: (e) => logRef.current?.push(walkEvent({ via: viaRef.current, why: e.what, ms: e.ms, stops: e.stops, error: e.error })),
     });
     starterRef.current = starter;
     return () => {
@@ -703,10 +713,42 @@ export function useSkWalkthrough({
       if (starterRef.current === starter) starterRef.current = null;
     };
   }, [router]);
-  const start = useCallback((opts?: { record?: boolean }) => {
-    starterRef.current?.start({ record: !!opts?.record || introRef.current });
+  // 2026-10-31 (founder: "Hi SK, show me around" by microphone started
+  // nothing; the logs had the server's start and then silence): each start
+  // says who asked and how it ended (voice-log.ts walkEvent), and a start that
+  // began NO run by START_RETRY_MS is asked once more — unless she said Skip
+  // or moved the tour in between.
+  const retryRef = useRef<number | null>(null);
+  const dropRetry = useCallback(() => {
+    if (retryRef.current !== null) window.clearTimeout(retryRef.current);
+    retryRef.current = null;
   }, []);
-  const cancelStart = useCallback(() => starterRef.current?.cancel(), []);
+  useEffect(() => dropRetry, [dropRetry]);
+  const start = useCallback(
+    (opts?: { record?: boolean; via?: WalkVia }) => {
+      const record = !!opts?.record || introRef.current;
+      viaRef.current = opts?.via ?? "menu";
+      logRef.current?.push(walkEvent({ via: viaRef.current, why: "asked", error: `run:${walkRef.current?.status ?? "none"}` }));
+      if (!starterRef.current) logRef.current?.push(walkEvent({ via: viaRef.current, why: "failed", error: "no starter" }));
+      starterRef.current?.start({ record });
+      dropRetry();
+      const seq = readySeqRef.current;
+      retryRef.current = window.setTimeout(() => {
+        retryRef.current = null;
+        // A run began (whatever became of it), or one is still starting: nothing
+        // to do. A tour from BEFORE the ask (paused at stop 3) does not count.
+        if (readySeqRef.current !== seq || startingRef.current) return;
+        viaRef.current = "retry";
+        logRef.current?.push(walkEvent({ via: "retry", why: "retry", error: `run:${walkRef.current?.status ?? "none"}` }));
+        if (!starterRef.current?.start({ record })) logRef.current?.push(walkEvent({ via: "retry", why: "no-run" }));
+      }, START_RETRY_MS);
+    },
+    [dropRetry],
+  );
+  const cancelStart = useCallback(() => {
+    dropRetry();
+    starterRef.current?.cancel();
+  }, [dropRetry]);
 
   // ── one stop, strictly in order: navigate → settle → highlight → speak ──
   const goKey = goKeyOf(walk);
@@ -717,6 +759,8 @@ export function useSkWalkthrough({
     if (!w || !s) return;
     const entry = ++entryRef.current;
     const ac = new AbortController();
+    /** The stop was decided (shown or skipped); else its cut-off is logged. */
+    let decided = false;
     const t0 = Date.now();
     const target = routePath(s.route);
     const here = window.location.pathname + window.location.search;
@@ -758,6 +802,7 @@ export function useSkWalkthrough({
             ? `stop "${s.id}" (${s.route}) skipped: no ${s.anchors.map((a) => a.sel).join(", ")} after ${waited} ms, page ${page}`
             : `stop "${s.id}" (${s.route}) skipped: the page settled without ${s.anchors.map((a) => a.sel).join(", ")}`,
         );
+        decided = true;
         logStop(s.id, s.route, outcome, waited, page);
         setWalk((cur) => (cur && cur.runId === w.runId && cur.index === w.index ? missingStop(cur) : cur));
         return;
@@ -791,6 +836,7 @@ export function useSkWalkthrough({
       setMatch(m);
       shownAtRef.current = { goKey, at: Date.now() };
       const busy = loadingSignal();
+      decided = true;
       logStop(s.id, s.route, "shown", Date.now() - t0, busy ? `still-loading:${busy}` : "settled");
       // Only now the line: the caption shows with the highlight, and the voice
       // (or, without sound, the reading time) decides when the tour moves on.
@@ -804,6 +850,9 @@ export function useSkWalkthrough({
     return () => {
       ac.abort();
       clearPartClock();
+      // 2026-10-31: cut off while still waiting (a pause, a move, a new run, the
+      // launcher going away) — before, such a stop left no trace at all.
+      if (!decided) logStop(s.id, s.route, "abandoned", Date.now() - t0, "cut-off");
     };
   }, [goKey, router, speakStop, logStop, startPartClock, clearPartClock]);
 
@@ -956,12 +1005,13 @@ export function useSkWalkthrough({
 
   const move = useCallback(
     (f: (w: WalkState) => WalkState) => {
+      dropRetry();
       quiet();
       setAdvance(null);
       setMatch(null);
       setWalk((cur) => (cur ? f(cur) : cur));
     },
-    [quiet],
+    [quiet, dropRetry],
   );
   const controls = useMemo(
     () => ({
@@ -971,16 +1021,19 @@ export function useSkWalkthrough({
       jump: (i: number) => move((w) => jumpTo(w, i)),
       resume: () => move(resumeWalk),
       pause: () => {
+        dropRetry();
         quiet();
         setAdvance(null);
         setWalk((cur) => (cur ? pauseWalk(cur, "user") : cur));
       },
     }),
-    [move, quiet],
+    [move, quiet, dropRetry],
   );
 
   const act = useCallback(
     (a: SkWalkAction) => {
+      // She moved the tour herself: no retry of a start under her.
+      dropRetry();
       // Starting (no run yet): only "skip" means something — it gives up the start.
       if (!isActive(walkRef.current)) {
         if (a === "skip" && startingRef.current) cancelStart();
@@ -992,7 +1045,7 @@ export function useSkWalkthrough({
       else if (a === "pause") controls.pause();
       else if (a === "resume") controls.resume();
     },
-    [controls, cancelStart],
+    [controls, cancelStart, dropRetry],
   );
 
   const command = useCallback(

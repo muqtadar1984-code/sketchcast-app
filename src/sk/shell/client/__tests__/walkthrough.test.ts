@@ -55,6 +55,7 @@ import {
   walkStartCommand,
   WALK_STORE_KEY,
   type PlannedStop,
+  type WalkStartEvent,
   type WalkState,
 } from "../walkthrough";
 import { WALK_STOPS, walkRoleFor, type WalkFacts, type WalkRole } from "@/sk/walkthrough/stops";
@@ -1080,5 +1081,77 @@ describe("the start: at once, never waiting for a page stop 1 is not on", () => 
     await c.flush();
     expect(c.ready).toHaveLength(0);
     expect(c.starter.start({ record: false })).toBe(true); // she can ask again
+  });
+});
+
+// 2026-10-31 (founder: "Hi SK, show me around" by microphone started nothing;
+// production had the server's start_tour → `walkthrough` event and SK saying
+// "Here's the tour…", then no stop and no skip for five minutes). Every start
+// now says how it ended, so the next silent one names its step.
+describe("the start reports how it ended", () => {
+  type Ctx = { record: boolean };
+  function harness(o: { facts?: () => Promise<{ role?: string; facts?: WalkFacts } | null>; settle?: () => Promise<boolean>; onReady?: () => void } = {}) {
+    const events: WalkStartEvent[] = [];
+    let clock = 1000;
+    const starter = createWalkStarter<Ctx>({
+      roleGuess: () => "teacher",
+      here: () => "/dashboard?book=b1",
+      navigate: () => {},
+      loadFacts: () => (o.facts ? o.facts() : Promise.resolve({ role: "teacher", facts: TEACHER_ALL })),
+      settle: () => (o.settle ? o.settle() : Promise.resolve(true)),
+      onStarting: () => {},
+      onReady: () => o.onReady?.(),
+      onEvent: (e) => events.push(e),
+      now: () => clock,
+      setTimer: () => 0,
+      clearTimer: () => {},
+    });
+    const flush = async () => {
+      for (let i = 0; i < 10; i++) await Promise.resolve();
+    };
+    return { starter, events, flush, tick: (ms: number) => (clock += ms) };
+  }
+
+  it("ready, with the number of stops and the time since it was asked", async () => {
+    let answer: (v: { role?: string; facts?: WalkFacts }) => void = () => {};
+    const h = harness({ facts: () => new Promise((r) => (answer = r)) });
+    h.starter.start({ record: false });
+    h.tick(640);
+    answer({ role: "teacher", facts: TEACHER_ALL });
+    await h.flush();
+    expect(h.events).toHaveLength(1);
+    expect(h.events[0]).toMatchObject({ what: "ready", ms: 640 });
+    expect(h.events[0]!.stops).toBeGreaterThan(5);
+  });
+
+  it("joined: a start asked while one is starting says so (it was not dropped silently)", async () => {
+    const h = harness({ facts: () => new Promise(() => {}) });
+    h.starter.start({ record: false });
+    expect(h.starter.start({ record: false })).toBe(false);
+    expect(h.events).toEqual([{ what: "joined", ms: 0 }]);
+  });
+
+  it("aborted (Skip while starting, or the settle gave up) and failed (a throw) are reported", async () => {
+    const c = harness({ facts: () => new Promise((r) => setTimeout(() => r(null), 0)) });
+    c.starter.start({ record: false });
+    c.starter.cancel();
+    await new Promise((r) => setTimeout(r, 5));
+    await c.flush();
+    expect(c.events.map((e) => e.what)).toEqual(["aborted"]);
+
+    const s = harness({ settle: () => Promise.resolve(false) });
+    s.starter.start({ record: false });
+    await s.flush();
+    expect(s.events.map((e) => e.what)).toEqual(["aborted"]);
+
+    const f = harness({
+      onReady: () => {
+        throw new Error("boom");
+      },
+    });
+    f.starter.start({ record: false });
+    await f.flush();
+    expect(f.events).toEqual([{ what: "failed", ms: 0, error: "boom" }]);
+    expect(f.starter.starting).toBe(false);
   });
 });

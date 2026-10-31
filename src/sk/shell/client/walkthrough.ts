@@ -756,7 +756,17 @@ export type WalkStarterDeps<C> = {
   clearTimer?: (h: unknown) => void;
   factsTimeoutMs?: number;
   settleCapMs?: number;
+  /** 2026-10-31 (founder: a spoken "show me around" started nothing, with
+   *  nothing in the logs between the server's `walkthrough` event and stop 1):
+   *  each start reports how it ended — to the voice log, never to her. */
+  onEvent?: (e: WalkStartEvent) => void;
+  now?: () => number;
 };
+
+/** How one start ended: "joined" (one was already starting), "ready" (the run
+ *  began, `stops` long), "empty" (no stop for this user), "aborted" (Skip, or
+ *  the page went away), "failed" (`error`). `ms` = since the start was asked. */
+export type WalkStartEvent = { what: "joined" | "ready" | "empty" | "aborted" | "failed"; ms: number; stops?: number; error?: string };
 
 export type WalkStarter<C> = {
   /** Start a run; false when one is already starting (that one goes on). */
@@ -799,7 +809,13 @@ export function createWalkStarter<C>(d: WalkStarterDeps<C>): WalkStarter<C> {
       return run !== null;
     },
     start(ctx) {
-      if (run) return false;
+      const now = d.now ?? (() => Date.now());
+      const t0 = now();
+      const report = (e: Omit<WalkStartEvent, "ms">) => d.onEvent?.({ ...e, ms: now() - t0 });
+      if (run) {
+        report({ what: "joined" });
+        return false;
+      }
       const ac = new AbortController();
       run = ac;
       d.onStarting(true);
@@ -811,18 +827,20 @@ export function createWalkStarter<C>(d: WalkStarterDeps<C>): WalkStarter<C> {
       void (async () => {
         try {
           const j = await facts(ac);
-          if (ac.signal.aborted) return;
+          if (ac.signal.aborted) return report({ what: "aborted" });
           const role = j?.role && (WALK_ROLES as readonly string[]).includes(j.role) ? (j.role as WalkRole) : guess;
           const stops = planWalk(role, j?.facts && typeof j.facts === "object" ? j.facts : {});
           // Stop 1 on the page she started from: a short settle (≤ 2 s).
           // Another page: no wait here — that stop waits for ITS page.
           if (stops[0] && atRoute(stops[0].route, from)) {
             const ok = await d.settle(d.settleCapMs ?? START_SETTLE_CAP_MS, ac.signal);
-            if (!ok || ac.signal.aborted) return;
+            if (!ok || ac.signal.aborted) return report({ what: "aborted" });
           }
           d.onReady(role, stops, ctx);
-        } catch {
-          /* a failed start leaves nothing behind: she can ask again */
+          report(stops.length ? { what: "ready", stops: stops.length } : { what: "empty" });
+        } catch (e) {
+          // A failed start leaves nothing behind: she can ask again.
+          report({ what: "failed", error: e instanceof Error ? e.message.slice(0, 80) : "error" });
         } finally {
           end(ac);
         }
